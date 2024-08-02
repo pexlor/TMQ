@@ -154,6 +154,7 @@ public:
     }
 
     /**
+     * 将一个新元素添加到队列的尾部
      * Enqueue a element. This will always try to move the tail to the new node, and set the next of
      * last tail to this new node. After all of the threads finish, the queue will be linked success.
      * @param t, the new value.
