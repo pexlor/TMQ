@@ -1,7 +1,7 @@
 #ifndef ANDROID_ORDERED_H
 #define ANDROID_ORDERED_H
 
-#include "Define.h"
+#include "Defines.h"
 #include "List.h"
 
 TMQ_NAMESPACE
