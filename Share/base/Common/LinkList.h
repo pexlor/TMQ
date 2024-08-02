@@ -1,144 +1,93 @@
+//
+// Created by 大老鼠 on 2023/1/27.
+//
 
-#ifndef ANDROID_LINKLIST_H
-#define ANDROID_LINKLIST_H
+#ifndef LINK_LIST
+#define LINK_LIST
 
-#include "Defines.h"
+typedef bool (*OnCompare)(void *value);
 
-TMQ_NAMESPACE
-
-template <typename T>
-class LinkNode
-{
+class ValueCompare{
 public:
-    T obj;
-    LinkNode *next;
-
-public:
-    LinkNode(const T &t) : obj(t), next(nullptr) {};
+    virtual int OnCompare(void* value) = 0;
 };
 
-template <typename T>
-class LinkIterator
-{
+template<typename T>
+class Node{
 public:
-    LinkNode<T> *node;
-    LinkIterator() : node(nullptr) {};
-    LinkIterator(LinkNode<T> *linkNode) : node(linkNode) {};
-    LinkIterator(const LinkIterator &iterator) : node(iterator.node) {};
+    Node<T>* next;
+    T value;
+    Node(const T& value): next(nullptr), value(value)
+    {
 
-    LinkIterator &operator++()
-    {
-        node = node->next;
-        return *this;
     }
-    LinkIterator operator++(int)
+    Node()
     {
-        LinkIterator tmp = *this;
-        ++*this;
-        return tmp;
-    }
-    LinkIterator &operator=(const LinkIterator &iterator)
-    {
-        node = iterator.node;
-        return *this;
-    }
-    bool operator==(const LinkIterator &iterator) const { return node == iterator.node; }
-    bool operator!=(const LinkIterator &iterator)
-    {
-        return node != iterator.node;
+        next = nullptr;
     }
 };
 
-template <typename T>
-class LinkList
-{
-private:
-    LinkNode<T> *header;
-    LinkNode<T> *tail;
-    int size;
-
+template<typename T>
+class LinkList{
 public:
-    LinkList() : header(nullptr), tail(nullptr), size(0) {};
-    LinkNode<T> *Add(const T &t);
-    LinkIterator<T> Find(const T &t);
-    bool Erase(LinkIterator<T> iterator, LinkIterator<T> lastIterator);
-    int Size();
-
-    LinkIterator<T> Begin()
+    Node<T>* header;
+    Node<T>* tail;
+    Node<T> empty;
+    LinkList(): header(nullptr), tail(nullptr)
     {
-        if (header)
-        {
-            return header;
+
+    }
+    void Enqueue(const T& t)
+    {
+        Node<T>* node = new Node<T>(t);
+        if(tail != nullptr){
+            tail->next = node;
         }
-        return 0;
+        tail = node;
+        if(header == nullptr)
+        {
+            header = node;
+        }
     }
-    LinkIterator<T> End() { return 0; };
-};
-
-template <typename T>
-LinkNode<T> *LinkList<T>::Add(const T &t)
-{
-    LinkNode<T> *node = new LinkNode<T>(t);
-    if (!header)
+    bool Consume(ValueCompare* compare, T& val)
     {
-        header = node;
-    }
-    if (tail)
-    {
-        tail->next = node;
-    }
-    tail = node;
-    size++;
-    return node;
-}
-
-template <typename T>
-bool LinkList<T>::Erase(LinkIterator<T> iterator, LinkIterator<T> lastIterator)
-{
-    if (iterator == End())
-    {
+        if(header == nullptr)
+        {
+            return false;
+        }
+        Node<T>* node = header;
+        Node<T>* last = nullptr;
+        while (node)
+        {
+            if(compare->OnCompare(&(node->value)) == 0)
+            {
+                if(last)
+                {
+                    last->next = node->next;
+                    if(last->next == nullptr)
+                    {
+                        tail = last;
+                    }
+                } else{
+                    header = node->next;
+                }
+                val = node->value;
+                if(node == header)
+                {
+                    header = nullptr;
+                }
+                if(node == tail)
+                {
+                    tail = nullptr;
+                }
+                delete node;
+                return true;
+            }
+            last = node;
+            node = node->next;
+        }
         return false;
     }
-    // header node
-    if (iterator.node == header)
-    {
-        header = iterator.node->next;
-    }
-    if (iterator.node == tail)
-    {
-        tail = lastIterator.node;
-    }
-    if (lastIterator != End())
-    {
-        lastIterator.node->next = iterator.node->next;
-    }
-    delete iterator.node;
-    iterator.node = nullptr;
-    size--;
-    return true;
-}
+};
 
-template <typename T>
-int LinkList<T>::Size()
-{
-    return size;
-}
-
-template <typename T>
-LinkIterator<T> LinkList<T>::Find(const T &t)
-{
-    LinkIterator<T> iterator = Begin();
-    while (iterator != End())
-    {
-        if (iterator.node->obj == t)
-        {
-            break;
-        }
-        iterator++;
-    }
-    return iterator;
-}
-
-TMQ_NAMESPACE_END
-
-#endif // ANDROID_LINKLIST_H
+#endif //LINK_LIST

@@ -1,20 +1,43 @@
+//
+//  Iterator.h
+//  Iterator
+//
+//  Created by  on 2022/3/15.
+//  Copyright (c)  Tencent. All rights reserved.
+//
 
-#ifndef ANDROID_ITERATOR_H
-#define ANDROID_ITERATOR_H
+#ifndef ITERATOR_H
+#define ITERATOR_H
 
-#include "Defines.h"
-
-TMQ_NAMESPACE
-
-template <typename T>
-class Iterator{
+/*
+ * A template class for iterator. In this interface, we define the base operation of a iterator,
+ * such as HasNext, Next, Remove.
+ */
+template<typename T>
+class Iterator {
 public:
- virtual bool HasNext() = 0;
- virtual T Next() = 0;
- virtual bool Remove() = 0;
- virtual ~Iterator(){};
+    /**
+     * Check whether the iterator has next or not.
+     * @return a boolean value, true if it has next, otherwise false.
+     */
+    virtual bool HasNext() = 0;
+
+    /**
+     * Achieve the next element and more the iterator to the next at the same time.
+     * @return
+     */
+    virtual T Next() = 0;
+
+    /**
+     * Safe to remove the element.
+     * @return a boolean value indicate whether the remove action is success or not.
+     */
+    virtual bool Remove() = 0;
+
+    /**
+     * Destruct for this virtual class.
+     */
+    virtual ~Iterator() {}
 };
 
-TMQ_NAMESPACE_END
-
-#endif //ANDROID_ITERATOR_H
+#endif //ITERATOR_H

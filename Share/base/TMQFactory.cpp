@@ -1,18 +1,36 @@
-#ifndef ANDROID_TMQFACTORY_H
-#define ANDROID_TMQFACTORY_H
+//
+//  TMQFactory.cpp
+//  TMQFactory
+//
+//  Created by  on 2022/5/28.
+//  Copyright (c)  Tencent. All rights reserved.
+//
 
-#if defined(_WIN32) && defined(TMQ_DLL_EXPORTS)
-#define TMQ_EXPORTS _declspec(dllexport)
-#else
-#define TMQ_EXPORTS
-#endif // WIN32
+#include "TMQFactory.h"
+#include "TMQMutex.h"
+#include "Topic.h"
 
-#include "TMQTopic.h"
+USING_TMQ_NAMESPACE
+/**
+ * TMQMutex for singleton.
+ */
+TMQMutex tmqInstMutex;
 
-class TMQFactory
-{
-public:
-    TMQ_EXPORTS static TMQTopic *GetTopicInstance();
-};
-
-#endif // ANDROID_TMQFACTORY_H
+/**
+ * Singleton method for achieving the instance of the tmq topic.
+ */
+TMQTopic *TMQFactory::GetTopicInstance() {
+    // A static inner variable for the instance.
+    static TMQTopic *tmqTopic = nullptr;
+    // Check whether the tmqTopic is nullptr.
+    if (tmqTopic == nullptr) {
+        tmqInstMutex.Lock();
+        // Check whether the tmqTopic is nullptr again.
+        if (tmqTopic == nullptr) {
+            // Create a instance for tmq topic.
+            tmqTopic = new Topic();
+        }
+        tmqInstMutex.UnLock();
+    }
+    return tmqTopic;
+}

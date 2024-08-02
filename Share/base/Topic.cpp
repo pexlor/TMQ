@@ -1,200 +1,174 @@
-// #include "stdio.h"
+//
+//  Topic.cpp
+//  Topic
+//
+//  Created by  on 2022/5/28.
+//  Copyright (c)  Tencent. All rights reserved.
+//
+
 #include "Topic.h"
 #include "TMQFactory.h"
 #include "TMQDispatcher.h"
 #include "TMQC.h"
-#include <cstring>
-#include "TMQContext.h"
+#include "MemSpace.h"
+#include "Defines.h"
+#include "TMQPicker.h"
+#include "IDGenerator.h"
 #include "TMQSettings.h"
-#include "TMQUtils.h"
+#include <cstring>
+
+#define KEY_TMQ_VERSION     "tmq_version"
 
 USING_TMQ_NAMESPACE
 
-TMQMsg::TMQMsg() : length(0), data(nullptr), priority(PRIORITY_DEFAULT), flag(0) {}
-
-TMQMsg::TMQMsg(const TMQMsg &tmqMsg)
-    : length(0), data(nullptr), priority(PRIORITY_DEFAULT), flag(0)
-{
-    length = tmqMsg.length;
-    if (length > 0)
-    {
-        data = new char[length];
-    }
-    if (data == nullptr)
-    {
-        length = 0;
-        return;
-    }
-    memcpy(data, tmqMsg.data, length);
-    priority = tmqMsg.priority;
-    flag = tmqMsg.flag;
-}
-TMQMsg::TMQMsg(const void *data, long length)
-    : length(0), data(nullptr), priority(PRIORITY_DEFAULT), flag(0)
-{
-    if (length <= 0 || data == nullptr)
-    {
-        return;
-    }
-    this->data = new char[length];
-    if (this->data == nullptr)
-    {
-        return;
-    }
-    this->length = length;
-    memcpy(this->data, data, length);
-}
-TMQMsg &TMQMsg::operator=(const TMQMsg &msg)
-{
-    if (this == &msg)
-    {
-        return *this;
-    }
-    priority = msg.priority;
-    flag = msg.flag;
-    if (data)
-    {
-        delete[] (char *)data;
-        length = 0;
-    }
-    this->data = new char[msg.length];
-    if (this->data != nullptr)
-    {
-        length = msg.length;
-        memcpy(this->data, msg.data, msg.length);
-    }
-    return *this;
-}
-TMQMsg::~TMQMsg()
-{
-    flag = 0;
-    length = 0;
-    delete[] (char *)data;
-}
-
-Topic::Topic() : maxReserved(MAX_RESERVE_DEFAULT)
-{
+/*
+ * Init the base members.
+ * In order to record the version of the tmq, we put it into the settings, so that all modules can
+ * achieve the tmq version easily.
+ */
+Topic::Topic() {
+    storage = new TMQStorage();
+    history = new TMQHistory(storage);
     dispatcher = new TMQDispatcher(this);
-    TMQSettings::GetInstance()->Put("version", TMQ_VERSION);
-}
-Topic::~Topic()
-{
-    delete dispatcher;
+    TMQSettings::GetInstance()->Put(KEY_TMQ_VERSION, TMQ_VERSION);
 }
 
-long Topic::Publish(const char *topic, void *data, long length, int flag, int priority)
-{
+/*
+ * Sample release all base members.
+ */
+Topic::~Topic() {
+    delete dispatcher;
+    delete storage;
+    delete history;
+}
+
+/*
+ * Pack binary data into TMQMsg, and delegate the publish to the tmq message publish function.
+ */
+TMQMsgId Topic::Publish(const char *topic, void *data, int length, int flag, int priority) {
     TMQMsg tmqMsg(data, length);
     tmqMsg.flag = flag;
     tmqMsg.priority = priority;
     return Publish(topic, tmqMsg);
 }
 
-long Topic::Publish(const char *topic, const TMQMsg &tmqMsg)
-{
-    if (topic == nullptr || strlen(topic) == 0 || strlen(topic) > TMQ_TOPIC_MAX_LENGTH)
-    {
-        return TMQ_MSG_ID_INVALID;
+/*
+ * Publish a tmq message. Four key steps:
+ * 1. Parse and save settings, if the topic is TOPIC_SETTINGS
+ * 2. Write the TMQMsg into storage and achieve the shadow.
+ * 3. Enqueue TMQMsg into the priority rc queues.
+ * 4. Wakeup the dispatcher if it is not pick only message.
+ */
+TMQMsgId Topic::Publish(const char *topic, const TMQMsg &tmqMsg) {
+    // Check the topic
+    if (topic == nullptr || strlen(topic) == 0 || strlen(topic) > TMQ_TOPIC_MAX_LENGTH) {
+        return ID_LONG_INVALID;
     }
-    if (tmqMsg.data == nullptr || tmqMsg.length <= 0)
-    {
-        return TMQ_MSG_ID_INVALID;
+    // Check the TMQMsg.
+    if (tmqMsg.data == nullptr || tmqMsg.length <= 0) {
+        return ID_LONG_INVALID;
     }
-    TMsg msg(topic, tmqMsg);
-    if (strncmp(topic, TOPIC_SETTINGS, strlen(TOPIC_SETTINGS)) == 0)
-    {
-        TMQSettings::Parse(static_cast<const char *>(msg.data), msg.length);
-        return TMQ_MSG_ID_INVALID;
+    // Check the topic is TOPIC_SETTINGS or not.
+    if (strncmp(topic, TOPIC_SETTINGS, strlen(TOPIC_SETTINGS)) == 0) {
+        TMQSettings::Parse(static_cast<const char *>(tmqMsg.data), tmqMsg.length);
+        return ID_LONG_INVALID;
     }
-    msgQueue.Push(msg);
-    if (!IS_PICK(msg.flag))
-    {
+    // Write the tmq message to storage
+    Shadow msgShadow = storage->Write(topic, tmqMsg);
+    if (GET_MSG_TYPE(msgShadow.flag) == 0) {
+        msgShadow.flag = FORCE_TYPE_ALL(msgShadow.flag);
+    }
+    // Enqueue shadow of this message into priority queues.
+    FindQueue(tmqMsg.priority)->Enqueue(msgShadow);
+    if (msgShadow.flag != TMQ_MSG_TYPE_PICK) {
+        // Wake up the dispatcher if necessary.
         dispatcher->Wakeup();
     }
-    return (long)msg.id;
+    return msgShadow.msgId;
 }
 
-long Topic::Subscribe(const char *topic, TMQReceiver *receiver)
-{
-    return (long)dispatcher->AddReceiver(topic, receiver);
+/*
+ * Subscribe a topic message by TMQReceiver. Delegating this operation to dispatcher directly.
+ */
+TMQId Topic::Subscribe(const char *topic, TMQReceiver *receiver) {
+    return dispatcher->AddReceiver(topic, receiver);
 }
-bool Topic::UnSubscribe(long subscribeId)
-{
+
+/*
+ * UnSubscribe a topic message by subscribeId. Delegating this operation to dispatcher directly.
+ */
+bool Topic::UnSubscribe(TMQId subscribeId) {
     dispatcher->RemoveReceiver(subscribeId);
     return true;
 }
-bool Topic::AddSent(const TMsg &msg)
-{
-    int sentTopicIndex = 0;
-    sentMutex.Lock();
-    for (; sentTopicIndex < sentMessages.Size(); ++sentTopicIndex)
-    {
-        if (strncmp(msg.topic, sentMessages.Get(sentTopicIndex).GetName(), TMQ_TOPIC_MAX_LENGTH) == 0)
-        {
-            if (sentMessages.Get(sentTopicIndex).Size() >= maxReserved)
-            {
-                sentMessages.Get(sentTopicIndex).Remove(0);
-            }
-            sentMessages.Get(sentTopicIndex).Add(msg);
-            break;
-        }
-    }
-    if (sentTopicIndex == sentMessages.Size())
-    {
-        TMQList<TMsg> sentTopicMessage;
-        sentTopicMessage.SetName(msg.topic);
-        sentTopicMessage.Add(msg);
-        sentMessages.Add(sentTopicMessage);
-    }
-    sentMutex.UnLock();
-    return true;
-}
-TMQReceiver *Topic::FindSubscriber(long subscribeId)
-{
+
+/*
+ * Find a topic receiver by subscribeId. Delegating this operation to dispatcher directly.
+ */
+TMQReceiver *Topic::FindSubscriber(TMQId subscribeId) {
     return dispatcher->FindReceiver(subscribeId);
 }
-long Topic::Pick(const char *topic, void **data)
-{
-    const char *topics[1];
-    topics[0] = topic;
-    TMsg msg;
-    bool success = msgQueue.Pick(topics, 1, msg);
-    if (success && msg.length > 0)
-    {
-        *data = new char[msg.length];
-        memcpy(*data, msg.data, msg.length);
+
+/*
+ * Enable persistent storage, invoke EnablePersistent in Storage directly.
+ */
+bool Topic::EnablePersistent(bool enable, const char *file) {
+    if (storage) {
+        return EnablePersistent(enable, file);
     }
-    return msg.length;
-}
-long Topic::Pick(const char **topics, long len, void **data)
-{
-    TMsg msg;
-    bool success = msgQueue.Pick(topics, len, msg);
-    if (success && msg.length > 0)
-    {
-        *data = new char[msg.length];
-        memcpy(*data, msg.data, msg.length);
-    }
-    return msg.length;
+    return false;
 }
 
-bool Topic::Poll(TMsg &msg, const char **excludes, int len)
-{
-    return msgQueue.Poll(msg, excludes, len);
+/*
+ * Create a tmq picker with topics and consuming types.
+ */
+IPicker *Topic::CreatePicker(const char **topics, int len, int type) {
+    auto *picker = new TMQ::TMQPicker(topics, len, type);
+    picker->SetHistory(history);
+    picker->SetStorage(storage);
+    picker->SetQueues(priorityQueue);
+    return picker;
 }
 
-TMQMutex instanceMutex;
-TMQTopic *TMQFactory::GetTopicInstance()
-{
-    static TMQTopic *tmqTopic = nullptr;
-    if (tmqTopic == nullptr)
-    {
-        instanceMutex.Lock();
-        if (tmqTopic == nullptr)
-        {
-            tmqTopic = new Topic();
-        }
-        instanceMutex.UnLock();
-    }
-    return tmqTopic;
+/**
+ * Destroy a picker
+ * @param picker, a pointer to the picker.
+ */
+void Topic::DestroyPicker(IPicker *picker) {
+    delete picker;
 }
+
+/**
+ * Find a priority queue with the priority
+ * @param priority, the priority of the queue.
+ * @return, a pointer to the RCQueue<Shadow>
+ */
+RCQueue<Shadow> *Topic::FindQueue(int priority) {
+    // Check and reset the index.
+    int index = priority < 0 ? 0 : priority;
+    index = index >= TMQ_PRIORITY_COUNT ? TMQ_PRIORITY_COUNT - 1 : index;
+    return &(priorityQueue[index]);
+}
+
+/*
+ * Get the history messages, delegate this operation to the history directly.
+ */
+TMQSize Topic::GetHistory(const char **topics, int len, TMQMsg **values) {
+    return history->GetHistory(topics, len, values);
+}
+
+/*
+ * Get the storage, return directly.
+ */
+IStorage *Topic::GetStorage() {
+    return storage;
+}
+
+/*
+ * Get the history, return directly.
+ */
+IHistory *Topic::GetHistory() {
+    return history;
+}
+
+

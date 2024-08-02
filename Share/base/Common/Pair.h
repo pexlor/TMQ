@@ -1,45 +1,66 @@
-#ifndef ANDROID_PAIR_H
-#define ANDROID_PAIR_H
+//
+//  Pair.h
+//  Pair
+//
+//  Created by  on 2022/8/12.
+//  Copyright (c)  Tencent. All rights reserved.
+//
+#ifndef PAIR_H
+#define PAIR_H
 
-#include "Defines.h"
-
-TMQ_NAMESPACE
-
-template <class Key, class Value>
-class Pair
-{
+// This is a class for wrapping the key-value pair. The Key and Value are both defined as class.
+template<class Key, class Value>
+class Pair {
 public:
- typedef Pair<Key, Value> Self;
+    // typedef Pair<Key, Value> to self for convenient usage.
+    typedef Pair<Key, Value> Self;
 
 public:
- Pair(const Key& key, const Value& value)
- : key(key), value(value)
- {
- }
- Pair(const Pair<Key, Value>& pair)
- {
- Assign(pair);
- }
- Pair<Key, Value>& operator=(const Pair<Key, Value>& pair)
- {
- Assign(pair);
- return *this;
- }
+    /**
+     * Construct a pair with a const key and value.
+     * @param key, the reference to the key.
+     * @param value, the reference to the value.
+     */
+    Pair(const Key &key, const Value &value)
+            : key(key), value(value) {
+    }
+
+    /**
+     * Construct a pair with an exist pair.
+     * @param pair, another pair to copy.
+     */
+    Pair(const Pair<Key, Value> &pair) {
+        Assign(pair);
+    }
+
+    /**
+     * Override the operate = to assign another pair to itself.
+     * @param pair, an existed pair.
+     * @return the reference the this pair.
+     */
+    Pair<Key, Value> &operator=(const Pair<Key, Value> &pair) {
+        Assign(pair);
+        return *this;
+    }
 
 private:
- void Assign(const Self& self)
- {
- if (&self != this)
- {
- key = self.key;
- value = self.value;
- }
- }
+    /**
+     * Assign operation to set the value of this pair.
+     * @param self
+     */
+    void Assign(const Self &self) {
+        if (&self != this) {
+            key = self.key;
+            value = self.value;
+        }
+    }
+
 public:
- Key key;
- Value value;
+    // The key of this pair.
+    Key key;
+    // The value of this pair.
+    Value value;
 };
 
-TMQ_NAMESPACE_END
 
-#endif //ANDROID_PAIR_H
+#endif //PAIR_H

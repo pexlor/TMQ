@@ -1,138 +1,136 @@
+//
+//  TMQContext.cpp
+//  TMQContext
+//
+//  Created by  on 2022/5/28.
+//  Copyright (c)  Tencent. All rights reserved.
+//
+
 #include "TMQContext.h"
-#include "cstring"
-#include "TMQFactory.h"
-#include "TMQueue.h"
 
 USING_TMQ_NAMESPACE
 
-void TMQContext::OnReceive(const TMQMsg *msg)
-{
-    TMsg *tMsg = (TMsg *)msg;
-    if (callback != nullptr && lastMsgId != tMsg->id)
-    {
-        callback(msg->data, msg->length, (long)this);
-        lastMsgId = tMsg->id;
+TMQContext::TMQContext(TMQMessageCallback messageCallback)
+        : lastMsgId(ID_LONG_INVALID), picker(nullptr) {
+    this->callback = messageCallback;
+}
+
+/**
+ * Clear the context.
+ * The picker is lazy loaded, so release it when it is not nullptr.
+ */
+TMQContext::~TMQContext() {
+    this->callback = nullptr;
+    delete picker;
+}
+
+/**
+ * Unless the callback is not nullptr and msg.msgId is not equal to the last msg id, the callback
+ * will be called. Otherwise, the callback will be ignored.
+ */
+void TMQContext::OnReceive(const TMQMsg *msg) {
+    if (callback != nullptr && msg->msgId != lastMsgId) {
+        callback(msg->data, msg->length, (TMQId) this);
+        lastMsgId = msg->msgId;
     }
 }
 
-bool TMQContext::Add(const char *topic)
-{
-    if (!topic || strlen(topic) >= TMQ_TOPIC_MAX_LENGTH)
-    {
-        return false;
-    }
+// Add a topic to the topic list.
+void TMQContext::AddTopic(const char *topic) {
     mutex.Lock();
-    bool exist = false;
-    for (int i = 0; i < length; ++i)
-    {
-        if (strncmp(topic, topics[i], TMQ_TOPIC_MAX_LENGTH) == 0)
-        {
-            exist = true;
+    // check whether the topic is in the topic list already. If true, give up this adding.
+    for (int i = 0; i < topicList.Size(); ++i) {
+        if (topicList.Get(i) == topic) {
+            // Quick return, unlock the mutex.
+            mutex.UnLock();
+            return;
+        }
+    }
+    // Add topic safely.
+    topicList.Add(topic);
+    // Subscribe this topic with the context,
+    // and add the subscribe id to subscriberList at the same time.
+    subscriberList.Add(TMQFactory::GetTopicInstance()->Subscribe(topic, this));
+    // For topic list has being changed, release the picker and assign to nullptr if it exists.
+    if (picker) {
+        delete picker;
+        picker = nullptr;
+    }
+    mutex.UnLock();
+}
+
+/**
+ * Remove an exist topic. Firstly, Find the required topic, then remove it, at the same time remove
+ * and cancel the subscription . If success, the topics in this context will be changed, so delete
+ * the picker and assigned to nullptr.
+ */
+void TMQContext::RemoveTopic(const char *topic) {
+    mutex.Lock();
+    for (int i = 0; i < topicList.Size(); ++i) {
+        if (topicList.Get(i) == topic) {
+            // remove topic
+            topicList.Remove(i);
+            // cancel the subscription
+            TMQFactory::GetTopicInstance()->UnSubscribe(subscriberList.Get(i));
+            // remove the subscriber id.
+            subscriberList.Remove(i);
+            // release picker if it is exist.
+            if (picker) {
+                delete picker;
+                picker = nullptr;
+            }
+            // finish and break.
             break;
         }
     }
-    if (!exist)
-    {
-        auto *ptr = new char[strlen(topic) + 1];
-        strcpy(ptr, topic);
-        ptr[strlen(topic)] = 0;
-        topics[length] = ptr;
-        if (callback)
-        {
-            subscribeIds[length] = TMQFactory::GetTopicInstance()->Subscribe(topic, this);
-        }
-        length++;
-    }
     mutex.UnLock();
-    return true;
 }
 
-void TMQContext::Remove(const char *topic)
-{
-    if (topic && strlen(topic) > 0 && strlen(topic) < TMQ_TOPIC_MAX_LENGTH)
-    {
-        mutex.Lock();
-        for (int i = 0; i < length; ++i)
-        {
-            if (strncmp(topic, topics[i], TMQ_TOPIC_MAX_LENGTH) == 0)
-            {
-                if (subscribeIds[i] > 0)
-                {
-                    TMQFactory::GetTopicInstance()->UnSubscribe(subscribeIds[i]);
-                }
-                delete[] topics[i];
-                for (int j = i; j + 1 < length; ++j)
-                {
-                    topics[j] = topics[j + 1];
-                    subscribeIds[j] = subscribeIds[j + 1];
-                }
-                topics[length - 1] = nullptr;
-                subscribeIds[length - 1] = 0;
-                length--;
-                break;
-            }
-        }
-        mutex.UnLock();
-        return;
-    }
-    if (topic == nullptr)
-    {
-        mutex.Lock();
-        for (int i = 0; i < length; ++i)
-        {
-            if (subscribeIds[i] > 0)
-            {
-                TMQFactory::GetTopicInstance()->UnSubscribe(subscribeIds[i]);
-                subscribeIds[i] = 0;
-            }
-            delete[] topics[i];
-        }
-        length = 0;
-        mutex.UnLock();
-    }
-}
-
-bool TMQContext::GetTopic(int index, char *topic)
-{
-    bool success = false;
+/**
+ * Publish a binary data to this context.
+ */
+void TMQContext::Publish(void *data, int length, int flag, int priority) {
     mutex.Lock();
-    if (index >= 0 && index < length)
-    {
-        strcpy(topic, topics[index]);
-        success = true;
+    // All topic in this context will be received this publish.
+    for (int i = 0; i < topicList.Size(); ++i) {
+        TMQFactory::GetTopicInstance()->Publish(topicList.Get(i).c_str(), data, length, flag,
+                                                priority);
     }
     mutex.UnLock();
-    return success;
 }
 
-int TMQContext::GetTopicLen()
-{
-    int size = 0;
+/**
+ * Pick message from this context.
+ */
+TMQSize TMQContext::Pick(void **data) {
     mutex.Lock();
-    size = length;
-    mutex.UnLock();
-    return size;
-}
-
-void TMQContext::publish(void *data, long len, int flag, int priority)
-{
-    char topic[TMQ_TOPIC_MAX_LENGTH];
-    for (int i = 0; i < GetTopicLen(); ++i)
-    {
-        memset(topic, 0, sizeof(topic));
-        if (!GetTopic(i, topic))
-            continue;
-        TMQFactory::GetTopicInstance()->Publish(topic, data, len, flag, priority);
+    // If the picker has not been created, while the topic list is not empty, we will create the
+    // picker first.
+    if (!picker && !topicList.Empty()) {
+        char **pickerTopics = new char *[topicList.Size()];
+        for (int i = 0; i < topicList.Size(); ++i) {
+            pickerTopics[i] = (char *) topicList.Get(i).c_str();
+        }
+        picker = new TMQPicker((const char **) pickerTopics,
+                               (int)topicList.Size(), TMQ_MSG_TYPE_ALL);
+        delete[] pickerTopics;
     }
-}
-
-long TMQContext::Pick(void **data)
-{
-    char *pts[CONTEXT_TOPIC_LENGTH] = {nullptr};
-    int len;
-    mutex.Lock();
-    len = length;
-    memcpy(pts, topics, sizeof(topics));
+    // Check the picker valid before use.
+    if (picker) {
+        // Stack memory for receive the picked tmq msg topic.
+        char pickedTopic[TMQ_TOPIC_MAX_LENGTH] = {0};
+        // TMQMsg object for receive message.
+        TMQMsg tmqMsg;
+        // If the return value is true, and the length of the tmq msg is valid, we assigned the
+        // result to *data, and return the real length.
+        if (picker->Pick(pickedTopic, tmqMsg) && tmqMsg.length > 0) {
+            mutex.UnLock();
+            *data = new char[tmqMsg.length];
+            memcpy(*data, tmqMsg.data, tmqMsg.length);
+            return tmqMsg.length;
+        }
+    }
     mutex.UnLock();
-    return TMQFactory::GetTopicInstance()->Pick((const char **)(pts), len, data);
+    // The picker is invalid or pick failed, return MSG_LENGTH_INVALID.
+    return MSG_LENGTH_INVALID;
 }
