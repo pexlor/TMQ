@@ -1,11 +1,3 @@
-//
-// LazyLinkList.h
-// LazyLinkList
-//
-// 创建于 2022/5/28.
-// 版权 (c) 腾讯。保留所有权利。
-//
-
 #ifndef LAZY_LINK_LIST_H
 #define LAZY_LINK_LIST_H
 

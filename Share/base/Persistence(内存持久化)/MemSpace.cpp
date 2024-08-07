@@ -1,11 +1,3 @@
-//
-// MemSpace.cpp
-// MemSpace
-//
-// 创建于 2022/5/28.
-// 版权所有 (c) 腾讯。保留所有权利。
-//
-
 #include "MemSpace.h"
 #include "Defines.h"
 #include "Metas.h"

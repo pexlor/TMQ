@@ -23,8 +23,8 @@
 /*
 
 /*构造一个持久性对象。两个重要步骤：
-    在页面空间上创建一个lazySectionList。
-    检查页面空间中是否有数据。如果没有任何数据，请求第一页来保存元段并将SECTION_ALLOC MetaSection添加到lazySectionList中。 
+  在页面空间上创建一个lazySectionList。
+  检查页面空间中是否有数据。如果没有任何数据，请求第一页来保存元段并将SECTION_ALLOC MetaSection添加到lazySectionList中。 
 */ 
 Persistence::Persistence(IPageSpace *pageSpace) : pageSpace(pageSpace), sectionSpaces{} {
     lazySectionList = new LazyLinearList<MetaSection>(pageSpace,
