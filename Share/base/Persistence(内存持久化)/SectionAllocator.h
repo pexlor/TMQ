@@ -1,11 +1,3 @@
-//
-//  SectionAllocator.h
-//  SectionAllocator
-//
-//  Created by  on 2022/5/28.
-//  Copyright (c)  Tencent. All rights reserved.
-//
-
 #ifndef SECTION_ALLOCATOR_H
 #define SECTION_ALLOCATOR_H
 
@@ -13,112 +5,110 @@
 #include "RbTree.h"
 #include "Persistence.h"
 
-/// Const definitions
-// Section address definitions. A section address is made up with the index of the the element and
-// its allocId. Section address is also a type of TMQAddress, which has the length 64 bits. The high
-// 32 bits represents the alloc index, while the low 32 bits represents the allocId.
-#define SECTION_INDEX(address)              (unsigned int)(address >> 32)
-#define SECTION_ALLOC_ID(address)           (unsigned int)(address)
-#define SECTION_ADDRESS(index, allocId)      ((TMQAddress)index << 32 | (TMQAddress)allocId)
+/// 常量定义
+// 部分地址定义。部分地址由元素的索引和其 allocId 组成。
+// 部分地址也是 TMQAddress 类型，长度为 64 位。高 32 位表示分配索引，而低 32 位表示 allocId。
+#define SECTION_INDEX(address) (unsigned int)(address >> 32)
+#define SECTION_ALLOC_ID(address) (unsigned int)(address)
+#define SECTION_ADDRESS(index, allocId) ((TMQAddress)index << 32 | (TMQAddress)allocId)
 
 /**
- * A section allocator is a partly implementation for the ISectionSpace, using to allocate and
- * deallocate the linear space. The most important capability of the section allocator is to do the
- * address reuse. The second important benefit of the section allocator is that it replaces the
- * remove operation of an element in the lazy linear list with the add operation, which can improve
- * the efficiency very much.
+ * 部分分配器是 ISectionSpace 的部分实现，用于分配和
+ * 释放线性空间。部分分配器最重要的能力是进行地址重用。
+ * 部分分配器的第二个重要益处是它用添加操作替换了懒惰线性列表中元素的删除操作，
+ * 这可以大大提高效率。
  */
 class SectionAllocator : public ISectionSpace {
 private:
-    // A RbTree to store the freed allocations with an ascending order of the tmq address.
+    // 一个 RbTree，用于按 tmq 地址的升序存储释放的分配。
     RbTree<TMQAddress, SecAlloc> freedAllocTree;
 
 protected:
     /**
-     * Internal method for address reuse.
-     * @param size, the size to reallocate.
-     * @return, a reused tmq address.
+     * 内部方法，用于地址重用。
+     * @param size, 要重新分配的大小。
+     * @return, 重用的 tmq 地址。
      */
     TMQAddress ReuseAddress(TMQSize size);
 
     /**
-     * Find a MetaAlloc by a section address.
-     * @param secAddress, the section address from method Allocate
-     * @param metaAlloc, a MetaAlloc for saving the result.
-     * @return the index of the found element in the linear space.
+     * 通过部分地址查找 MetaAlloc。
+     * @param secAddress, 方法 Allocate 的部分地址。
+     * @param metaAlloc, 用于保存结果的 MetaAlloc。
+     * @return 在线性空间中找到的元素的索引。
      */
     int FindAlloc(TMQAddress secAddress, SecAlloc &metaAlloc);
 
     /**
-     * Internal method, read the freed allocation and put them into the freedAllocTree. Some time,
-     * reading data from the linear space implemented by disk file will be time-consumed. So this
-     * method will read data in batches.
+     * 内部方法，读取释放的分配并将它们放入 freedAllocTree。
+     * 有时，从磁盘文件实现的线性空间读取数据将是耗时的。
+     * 因此，此方法将批量读取数据。
      */
     void GetFreedAllocList();
 
     /**
-     * Try to free pages. It will calculate the freed pages from the tmq address. When deallocate a
-     * tmq address, we will collect the freed tmq address with the same page. If all of the address
-     * fragments have been freed, its associated page will be freed too.
-     * @param address, a tmq address to free.
+     * 尝试释放页面。它将根据 tmq 地址计算释放的页面。
+     * 当释放一个 tmq 地址时，我们将收集与同一页面相关的释放的 tmq 地址。
+     * 如果所有地址片段都已释放，其关联的页面也将被释放。
+     * @param address, 要释放的 tmq 地址。
      */
     bool TryFreePage(TMQAddress address);
 
     /**
-     * Get method for the lazy linear list for element type SecAlloc.
-     * @param reserve, reserve count for this require.
-     * @return, a pointer to the LazyLinearList.
+     * 获取 SecAlloc 元素类型的懒惰线性列表的方法。
+     * @param reserve, 此要求的保留计数。
+     * @return, 懒惰线性列表的指针。
      */
     virtual LazyLinearList<SecAlloc> *GetLazyAllocList(TMQSize reserve = 0) = 0;
 
     /**
-     * A virtual method to allocate pages.
-     * @param size, required page size.
-     * @param allocSize, the real size to be allocated.
-     * @return the page index.
+     * 分配页面的虚拟方法。
+     * @param size, 所需的页面大小。
+     * @param allocSize, 要分配的实际大小。
+     * @return 页面索引。
      */
     virtual int AllocPages(int size, int *allocSize) = 0;
 
     /**
-     * Get the size of the allocated page.
-     * @param page, page index to find.
-     * @return, the size of the allocated page.
+     * 获取已分配页面的大小。
+     * @param page, 要查找的页面索引。
+     * @return, 已分配页面的大小。
      */
     virtual int GetAllocPageSize(int page) = 0;
 
     /**
-     * Deallocate the page.
-     * @param page, page to deallocate.
+     * 释放页面。
+     * @param page, 要释放的页面。
      */
     virtual void DeallocPages(int page) = 0;
 
     /**
-     * Release an allocated section address.
-     * @param secAddress, the section address to release.
-     * @return a boolean value indicate whether the release is success or not.
+     * 释放已分配的部分地址。
+     * @param secAddress, 要释放的部分地址。
+     * @return 表示释放是否成功的布尔值。
      */
     virtual bool ReleaseAlloc(TMQAddress secAddress) = 0;
 
     /**
-     * Append a alloc info to the section space.
-     * @param tmqAddress, a tmq address from linear space.
-     * @param size, the size of the address.
-     * @param state, alloc state of this address: ADDRESS_ALLOC, ADDRESS_FREE, ADDRESS_RELEASE
-     * @return a tmq address in the section.
+     * 将分配信息追加到部分空间。
+     * @param tmqAddress, 来自线性空间的 tmq 地址。
+     * @param size, 地址的大小。
+     * @param state, 此地址的分配状态：ADDRESS_ALLOC, ADDRESS_FREE, ADDRESS_RELEASE
+     * @return 部分中的 tmq 地址。
      */
     virtual TMQAddress AppendAlloc(TMQAddress tmqAddress, TMQSize size, TMQLState state) = 0;
 
 public:
     /**
-     * Allocate the linear storage space with the specified length.
-     * @param length, the length of the linear storage space to allocate.
-     * @return, a tmq address, ADDRESS_NULL will be return if allocate fail.
+     * 分配指定长度的线性存储空间。
+     * @param length, 要分配的线性存储空间的长度。
+     * @return, tmq 地址，如果分配失败，将返回 ADDRESS_NULL。
      */
     virtual TMQAddress Allocate(TMQLSize length);
 
     /**
-     * Deallocate a tmq address.
-     * @param address, the address to deallocate.
+     * 释放 tmq 地址。
+     * @param address, 要释放的地址。
      */
     virtual void Deallocate(TMQAddress address);
 };

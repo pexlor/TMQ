@@ -1,29 +1,20 @@
-//
-//  SectionAllocator.cpp
-//  SectionAllocator
-//
-//  Created by  on 2022/5/28.
-//  Copyright (c)  Tencent. All rights reserved.
-//
-
-
 #include "SectionAllocator.h"
 
 /**
- * Compare function for SecAlloc compare.
- * @param p1, the first SecAlloc pointer to compare.
- * @param p2, the second SecAlloc pointer to compare.
- * @return, a int value for the comparison.
+ * SecAlloc 比较函数的比较函数。
+ * @param p1, 第一个 SecAlloc 指针进行比较。
+ * @param p2, 第二个 SecAlloc 指针进行比较。
+ * @return, 比较的整数值。
  */
 int AllocCompare(void *p1, void *p2) {
-    // Force a type conversion
+    // 强制类型转换
     auto *alloc = (SecAlloc *) p1;
     auto *another = (SecAlloc *) p2;
-    // Get the alloc id from section address of *p1.
+    // 从 *p1 的部分地址获取分配 id。
     int allocId = SECTION_ALLOC_ID(alloc->secAddress);
-    // Get the alloc id from section address of *p2.
+    // 从 *p2 的部分地址获取分配 id。
     int anotherId = SECTION_ALLOC_ID(another->secAddress);
-    // comparison by the alloc id.
+    // 通过分配 id 进行比较。
     if (allocId == anotherId) {
         return 0;
     }
@@ -31,19 +22,17 @@ int AllocCompare(void *p1, void *p2) {
 }
 
 /*
- * Allocate linear space with required length. Before allocation new linear space, do address reuse
- * first. If address allocation is success, save the tmq address to section space and return the
- * section tmq address.
+ * 分配所需长度的线性空间。在分配新的线性空间之前，首先进行地址重用。
+ * 如果地址分配成功，将 tmq 地址保存到部分空间并返回部分 tmq 地址。
  */
 TMQAddress SectionAllocator::Allocate(TMQLSize length) {
-    // Do address reuse, If success, return the address directly.
+    // 进行地址重用，如果成功，直接返回地址。
     TMQAddress secAddress = ReuseAddress(length);
     if (secAddress != ADDRESS_NULL) {
         return secAddress;
     }
-    // Address reuse failed, we had to apply to allocate new pages, and divides the pages into two
-    // linear space, one is for the return value, and another save to the freed list for the next
-    // allocation.
+    // 地址重用失败，我们必须申请新的页面，并将页面分为两个线性空间，
+    // 一个是返回值，另一个保存到下一个分配的释放列表中。
     int allocSize = (int) (length / TMQ_PAGE_SIZE + 1);
     int allocPage = AllocPages(allocSize, &allocSize);
     if (allocPage <= 0) {
@@ -51,29 +40,29 @@ TMQAddress SectionAllocator::Allocate(TMQLSize length) {
     }
     TMQAddress allocAddress = ADDRESS(allocPage, 0);
     TMQSize allocLen = allocSize * TMQ_PAGE_SIZE;
-    // Save the freed part of the allocated page space.
+    // 保存分配页面空间的释放部分。
     SecAlloc leftAlloc(secAddress, allocAddress + length, allocLen - length, ADDRESS_FREE);
     leftAlloc.secAddress = AppendAlloc(leftAlloc.address, leftAlloc.size, leftAlloc.state);
     freedAllocTree.Insert(Pair<TMQAddress, SecAlloc>(leftAlloc.address, leftAlloc));
-    // Save and return the allocated part.
+    // 保存并返回分配的部分。
     SecAlloc metaAlloc(secAddress, allocAddress, length, ADDRESS_ALLOC);
     metaAlloc.secAddress = AppendAlloc(metaAlloc.address, metaAlloc.size, metaAlloc.state);
     return metaAlloc.secAddress;
 }
 
 /*
- * Deallocate a section address. When the address is valid, we will find the SecAlloc associated
- * with this section address. Then change the state of the SecAlloc from ADDRESS_ALLOC to
- * ADDRESS_FREE, and put it into freed address map. At last, we will toggle the TryFreePage task.
+ * 释放部分地址。当地址有效时，我们将找到与此部分地址关联的 SecAlloc。
+ * 然后将 SecAlloc 的状态从 ADDRESS_ALLOC 更改为 ADDRESS_FREE，并将其放入释放地址映射中。
+ * 最后，我们将切换 TryFreePage 任务。
  */
 void SectionAllocator::Deallocate(TMQAddress address) {
     if (address == ADDRESS_NULL) {
         return;
     }
-    // Find the SecAlloc associated with this section address
+    // 查找与此部分地址关联的 SecAlloc
     SecAlloc indexAlloc;
     int allocIndex = FindAlloc(address, indexAlloc);
-    // Find fail, ignore.
+    // 查找失败，忽略。
     if (allocIndex < 0) {
         return;
     }
@@ -81,30 +70,29 @@ void SectionAllocator::Deallocate(TMQAddress address) {
     if (!lazyLinearList) {
         return;
     }
-    // Change the state to ADDRESS_FREE, and put this freed tmq address to freedAllocTree.
+    // 将状态更改为 ADDRESS_FREE，并将此释放的 tmq 地址放入 freedAllocTree。
     indexAlloc.state = ADDRESS_FREE;
     lazyLinearList->Set(allocIndex, indexAlloc);
     freedAllocTree.Insert(Pair<TMQAddress, SecAlloc>(indexAlloc.address, indexAlloc));
-    // Invoke the page free task.
+    // 调用页面释放任务。
     TryFreePage(indexAlloc.address);
 }
 
 /*
- * The method to do the address reuse. For the linear storage space, we will reuse the address at
- * the beginning ot the linear space always. That is why we use the RbTree to store the tmq address.
- * Because the RbTree can store all freed address with an ascending order. Thus, we can search the
- * freed address at the beginning of RbTree. Upon finding a fulfill linear space, we may reuse
- * address directly when one freed address is fulfill the requirement, or we may divide the long
- * linear space, or merge some small linear space.
+ * 进行地址重用的方法。对于线性存储空间，我们总是重用线性空间开头的地址。
+ * 这就是为什么我们使用 RbTree 存储 tmq 地址的原因。
+ * 因为 RbTree 可以按升序存储所有释放的地址。因此，我们可以搜索 RbTree 开头的释放地址。
+ * 找到一个满足空间要求的线性空间后，我们可以直接重用地址，
+ * 或者我们可以分割长的线性空间，或者合并一些小的线性空间。
  */
 TMQAddress SectionAllocator::ReuseAddress(TMQSize size) {
     if (size == 0) {
         return ADDRESS_NULL;
     }
-    // Toggle the free address reading task.
+    // 切换释放地址读取任务。
     GetFreedAllocList();
 
-    // Iterate the freedAllocTree to calculate a linear space meet the space requirements.
+    // 遍历 freedAllocTree 以计算满足空间要求的线性空间。
     int page = -1, count = 0;
     TMQSize candidate = 0;
     RbIterator<TMQAddress, SecAlloc> indexIterator = freedAllocTree.begin();
@@ -123,23 +111,22 @@ TMQAddress SectionAllocator::ReuseAddress(TMQSize size) {
         }
         indexIterator++;
     }
-    // Check whether the candidate < size, true represents the finding is failed.
+    // 检查候选者是否 < size，true 表示查找失败。
     if (candidate < size) {
         return ADDRESS_NULL;
     }
     /**
-     *  we have found the reuse address(es), now perform these actions:
-     *  1th. release the candidate address(es) from section space
-     *  2th. add the alloc address to section space
-     *  3th. add the left free address to section space
-     *  4th. remove candidate address(es) from freeAllocList
-     *  5th. add the left free address to freeAllocList
-     *  6th. return the reuse tmq address
-     *  Attentions: the steps 1, 2, 3 should be success atomically, since we
-     *      have no transaction mechanism now, this will be treated as a known issue.
+     * 我们找到了重用的地址（es），现在执行以下操作：
+     * 1th. 从部分空间释放候选地址（es）
+     * 2th. 将分配地址添加到部分空间
+     * 3th. 将左侧释放地址添加到部分空间
+     * 4th. 从 freeAllocList 中删除候选地址（es）
+     * 5th. 将左侧释放地址添加到 freeAllocList
+     * 6th. 返回重用的 tmq 地址
+     * 注意事项：步骤 1、2、3 应该原子性地成功，由于我们现在没有事务机制，这将被视为已知问题。
      */
 
-    // release all of the linear space from the section.
+    // 从部分释放所有线性空间。
     RbIterator<TMQAddress, SecAlloc> startIterator = indexIterator;
     for (int i = 0; i < count - 1; ++i) {
         startIterator--;
@@ -148,7 +135,7 @@ TMQAddress SectionAllocator::ReuseAddress(TMQSize size) {
     for (int i = 0; i < count; ++i, --iterator) {
         ReleaseAlloc(iterator->value.secAddress);
     }
-    // record(append) candidate linear space to section
+    // 记录（附加）候选线性空间到部分
     SecAlloc startAlloc = startIterator->value;
     TMQAddress allocAddress = AppendAlloc(startAlloc.address, size, ADDRESS_ALLOC);
     if (allocAddress == ADDRESS_NULL) {
@@ -160,7 +147,7 @@ TMQAddress SectionAllocator::ReuseAddress(TMQSize size) {
     while (startIterator != endIterator) {
         freedAllocTree.Erase(startIterator++);
     }
-    // append the remaining space
+    // 附加剩余空间
     if (candidate > size) {
         SecAlloc leftAlloc(ADDRESS_NULL, startAlloc.address + size, candidate - size, ADDRESS_FREE);
         leftAlloc.secAddress = AppendAlloc(leftAlloc.address, leftAlloc.size, ADDRESS_FREE);
@@ -170,12 +157,10 @@ TMQAddress SectionAllocator::ReuseAddress(TMQSize size) {
 }
 
 /*
- * Find the SecAlloc associated with the secAddress. When there is no shrink for the section space,
- * the index from the section address is equal to the SecAlloc index in the section space. So, using
- * the index we can find the element, but, if the section address of the SecAlloc is not equal to
- * the secAddress in parameters, it means the section space has been reset. With this situation, we
- * will search the real SecAlloc with the FindPosition method, which is based on quick sort
- * algorithm.
+ * 查找与 secAddress 关联的 SecAlloc。当部分空间没有收缩时，
+ * 部分地址的索引等于部分空间中 SecAlloc 的索引。因此，使用索引我们可以找到元素，
+ * 但是，如果 SecAlloc 的部分地址不等于参数中的 secAddress，这意味着部分空间已被重置。
+ * 在这种情况下，我们将使用基于快速排序算法的 FindPosition 方法再次搜索真正的 SecAlloc。
  */
 int SectionAllocator::FindAlloc(TMQAddress secAddress, SecAlloc &metaAlloc) {
     if (secAddress == ADDRESS_NULL) {
@@ -187,9 +172,9 @@ int SectionAllocator::FindAlloc(TMQAddress secAddress, SecAlloc &metaAlloc) {
     }
     int index = SECTION_INDEX(secAddress);
     metaAlloc = lazyLinearList->Get(index);
-    // Check whether the found is success or not.
+    // 检查找到的是否成功。
     if (metaAlloc.secAddress != secAddress) {
-        // Find fail, use the FindPosition to search again.
+        // 查找失败，使用 FindPosition 再次搜索。
         SecAlloc foundAlloc(secAddress, ADDRESS_NULL, 0, false);
         int pos = lazyLinearList->FindPosition(foundAlloc, AllocCompare);
         if (pos >= 0 && pos < lazyLinearList->GetSize()) {
@@ -197,18 +182,17 @@ int SectionAllocator::FindAlloc(TMQAddress secAddress, SecAlloc &metaAlloc) {
             index = pos;
         }
     }
-    // Check whether the find is success or not.
+    // 检查找找是否成功。
     if (SECTION_ALLOC_ID(metaAlloc.secAddress) != SECTION_ALLOC_ID(secAddress)) {
-        // Find fail, return invalid value.
+        // 查找失败，返回无效值。
         return -1;
     }
     return index;
 }
 
 /*
- * Get freed allocations and put them into freedAllocTree. Every call of this function, it will read
- * limit elements. The max element to read will be TMQ_PAGE_SIZE / sizeof(SecAlloc), which means
- * read content in one page.
+ * 获取释放的分配并将它们放入 freedAllocTree。每次调用此函数时，它都会读取限制元素。
+ * 最大读取元素数为 TMQ_PAGE_SIZE / sizeof(SecAlloc)，这意味着在一个页面中读取内容。
  */
 void SectionAllocator::GetFreedAllocList() {
     static int cold = 0;
@@ -218,12 +202,12 @@ void SectionAllocator::GetFreedAllocList() {
         if (limit == 0) {
             limit = lazyLinearList->GetSize();
         }
-        // Calculate the max length to read.
+        // 计算最大读取长度。
         int i = cold, max = TMQ_PAGE_SIZE / sizeof(SecAlloc);
         for (; i < lazyLinearList->GetSize() && i - cold < max && i < limit; ++i) {
             SecAlloc metaAlloc = lazyLinearList->Get(i);
             if (metaAlloc.state == ADDRESS_FREE) {
-                // Read a freed SecAlloc, insert it into freedAllocTree
+                // 读取一个释放的 SecAlloc，将其插入到 freedAllocTree
                 freedAllocTree.Insert(Pair<TMQAddress, SecAlloc>(metaAlloc.address, metaAlloc));
             }
         }
@@ -232,28 +216,27 @@ void SectionAllocator::GetFreedAllocList() {
 }
 
 /*
- * What the important action of this method is that it iterates the freedAllocTree and get the freed
- * section address with the same page of the address. Then check whether the page associated with
- * these section address can be freed or not. If true, it will invoke DeallocPages to free the pages.
+ * 此方法的重要动作是遍历 freedAllocTree 并获取与地址相同页面的释放部分地址。
+ * 然后检查与这些部分地址关联的页面是否可以释放。如果为真，它将调用 DeallocPages 释放页面。
  */
 bool SectionAllocator::TryFreePage(TMQAddress address) {
     if (address == ADDRESS_NULL) {
         return false;
     }
-    // Get the page of the address.
+    // 获取地址的页面。
     int page = PAGE(address);
-    // Get the size associated with this page.
+    // 获取与此页面关联的大小。
     int size = GetAllocPageSize(page) * TMQ_PAGE_SIZE;
     if (size <= 0) {
         return false;
     }
-    // Find the SecAlloc from freedAllocTree
+    // 从 freedAllocTree 中找到 SecAlloc
     RbIterator<TMQAddress, SecAlloc> foundIterator = freedAllocTree.Find(address);
     if (foundIterator == freedAllocTree.end()) {
         return false;
     }
     RbIterator<TMQAddress, SecAlloc> left, right, iterator;
-    // Iterate left for freed length, and add it to total.
+    // 遍历左侧以释放长度，并将其添加到总计。
     TMQSize total = 0;
     iterator = foundIterator;
     while (iterator != freedAllocTree.end() && page == PAGE(iterator->value.address)) {
@@ -261,24 +244,23 @@ bool SectionAllocator::TryFreePage(TMQAddress address) {
         left = iterator;
         iterator--;
     }
-    // Iterate right for freed length, and add it to total.
+    // 遍历右侧以释放长度，并将其添加到总计。
     right = foundIterator;
     while (++right != freedAllocTree.end() && page == PAGE(right->value.address)) {
         total += right->value.size;
     }
-    // If the freed total length is equal to the size allocated by pages, it means that the tmq
-    // address allocated from that page all have been freed, so deallocate that page and remove
-    // all of the freed address from freedAllocTree and release them with ReleaseAlloc.
+    // 如果释放的总长度等于页面分配的大小，这意味着从该页面分配的所有 tmq
+    // 地址都已被释放，因此释放该页面并从 freedAllocTree 中删除所有释放的地址并释放它们。
     if (total == size) {
         RbIterator<TMQAddress, SecAlloc> it = left;
         do {
             SecAlloc metaAlloc = it->value;
-            // Release it from section space.
+            // 从部分空间释放它。
             ReleaseAlloc(metaAlloc.secAddress);
-            // Erase from freedAllocTree
+            // 从 freedAllocTree 中擦除
             freedAllocTree.Erase(it++);
         } while (it != right);
-        // Deallocate the page and return success.
+        // 释放页面并返回成功。
         DeallocPages(page);
         return true;
     }

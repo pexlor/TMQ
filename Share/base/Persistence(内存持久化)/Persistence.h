@@ -1,11 +1,3 @@
-//
-//  Persistence.h
-//  Persistence
-//
-//  Created by  on 2022/5/28.
-//  Copyright (c)  Tencent. All rights reserved.
-//
-
 #ifndef PERSISTENCE_H
 #define PERSISTENCE_H
 
@@ -16,191 +8,189 @@
 #include "List.h"
 
 /**
- * A interface definition for the data persistence. It provides functions to manage the section
- * space, such as create, drop and find method. The other functions, EraseLinearSpace,
- * AppendLinearSpace will also the APIs to manage the section space. With the section space, One can
- * allocate, deallocate the linear space as need, and read/write data from/to the persistence.
+ * 数据持久性的接口定义。它提供了管理部分空间的函数，如创建、删除和查找方法。
+ * 其他函数，EraseLinearSpace、AppendLinearSpace 也是管理部分空间的 API。
+ * 有了部分空间，可以根据需要分配、释放线性空间，并从/向持久性读取/写入数据。
  */
 class IPersistence {
 public:
     /**
-     * Create a named linear space.
-     * @param name, a pointer to the name.
-     * @return, a pointer to the created section space.
+     * 创建一个命名的线性空间。
+     * @param name, 名称的指针。
+     * @return, 创建的部分空间的指针。
      */
     virtual ISectionSpace *CreateLinearSpace(const char *name) = 0;
 
     /**
-     * Drop a linear space with specified.
-     * @param name, a pointer to the name.
+     * 删除指定名称的线性空间。
+     * @param name, 名称的指针。
      */
     virtual void DropLinearSpace(const char *name) = 0;
 
     /**
-     * Find a linear space with the name.
-     * @param name, a pointer to the name.
-     * @return a pointer to the section space, nullptr will be returned if it is not exist.
+     * 查找指定名称的线性空间。
+     * @param name, 名称的指针。
+     * @return 如果不存在，则返回 nullptr 的部分空间指针。
      */
     virtual ISectionSpace *FindLinearSpace(const char *name) = 0;
 
     /**
-     * Erase a linear space, clear all data in that section space.
-     * @param name, a pointer to the name.
+     * 擦除线性空间，清除该部分空间中的所有数据。
+     * @param name, 名称的指针。
      */
     virtual void EraseLinearSpace(const char *name) = 0;
 
     /**
-     * Copy data to the end of the destination section space from the source section space.
-     * @param dst, the destination section name.
-     * @param src, the source section name.
-     * @return, bool, a boolean value indicate whether it is success or not.
+     * 将源部分空间的数据复制到目标部分空间的末尾。
+     * @param dst, 目标部分名称。
+     * @param src, 源部分名称。
+     * @return, bool, 表示成功与否的布尔值。
      */
     virtual bool AppendLinearSpace(const char *dst, const char *src) = 0;
 };
 
 /**
- * The implementation for the IPersistence. This class will be used to manage the page space and
- * multiply section spaces, and add or remove meta sections.
+ * IPersistence 的实现。此类将用于管理页面空间和多个部分空间，
+ * 并添加或删除元部分。
  */
 class Persistence : public IPersistence {
 private:
-    // A pointer to the page space, MemSpace or FileSpace.
+    // 页面空间的指针，MemSpace 或 FileSpace。
     IPageSpace *pageSpace;
-    // Section space list.
+    // 部分空间列表。
     List<ILinearSpace *> sectionSpaces;
-    // Meta section list.
+    // 元部分列表。
     LazyLinearList<MetaSection> *lazySectionList;
 
 public:
     /**
-     * Construct a persistence with a page space.
-     * @param pageSpace, a pointer to the page space.
+     * 使用页面空间构造持久性。
+     * @param pageSpace, 页面空间的指针。
      */
     Persistence(IPageSpace *pageSpace);
 
     /**
-     * Destructor for the Persistence.
+     * Persistence 的析构函数。
      */
     ~Persistence();
 
     /**
-     * Get method to the page space.
-     * @return a pointer to the page space.
+     * 获取页面空间的方法。
+     * @return 页面空间的指针。
      */
     IPageSpace *GetPageSpace();
 
     /**
-     * Find a meta section, if it is not exits, the meta section will be created.
-     * @param sec, a pointer to the secion name.
-     * @param create, a boolean value indicate whether create a new meta section or not.
-     * @return a meta section named by sec.
+     * 查找元部分，如果不存在，将创建元部分。
+     * @param sec, 部分名称的指针。
+     * @param create, 表示是否创建新元部分的布尔值。
+     * @return 由 sec 命名的元部分。
      */
     MetaSection FindSection(const char *sec, bool create = true);
 
     /**
-     * Erase a section, clear all data in the section space named sec.
-     * @param sec, a const pointer to the section name.
+     * 擦除部分，清除名为 sec 的部分空间中的所有数据。
+     * @param sec, 部分名称的常量指针。
      */
     void EraseSection(const char *sec);
 
     /**
-     * Check whether the section space is overflow with expand or not.
-     * @param section, meta section to check.
-     * @param expand, the reserve count to check.
-     * @return, bool, a boolean value indicate whether the it is overflow with the reserved count.
+     * 检查部分空间是否溢出。
+     * @param section, 要检查的元部分。
+     * @param expand, 要检查的保留计数。
+     * @return, bool, 表示是否溢出保留计数的布尔值。
      */
     bool Overflow(const MetaSection &section, TMQSize expand);
 
     /**
-     * Resize the meta section with the reserve count, default reserve is 1.
-     * @param section, a meta section to reserve.
-     * @param reserve, the count to reserve.
-     * @return bool, a boolean value indicate whether the resize operation is success or not.
+     * 使用保留计数调整元部分的大小，默认保留为 1。
+     * @param section, 要保留的元部分。
+     * @param reserve, 要保留的计数。
+     * @return bool, 表示调整大小操作是否成功的布尔值。
      */
     bool ResizeSection(MetaSection &section, TMQSize reserve = 1);
 
     /**
-     * Update the meta section. This will deallocate page in meta section of persistence and update
-     * to page in parameter named section.
-     * @param section, the section to update.
-     * @return bool, a boolean value indicate whether this update is success or not.
+     * 更新元部分。这将释放持久性中元部分的页面，并更新到参数命名的部分中的页面。
+     * @param section, 要更新的部分。
+     * @return bool, 表示此更新是否成功的布尔值。
      */
     bool UpdateSection(MetaSection &section);
 
     /**
-     * Move a meta section and its section space in to new page.
-     * @param section, meta section to move.
-     * @param page, new destination page.
-     * @param size, size of the new page.
-     * @return, bool, a boolean value indicates whether the move is success or not.
+     * 移动元部分及其部分空间到新页面。
+     * @param section, 要移动的元部分。
+     * @param page, 新的目标页面。
+     * @param size, 新页面的大小。
+     * @return, bool, 表示移动是否成功的布尔值。
      */
     bool MoveSection(MetaSection &section, int page, TMQSize size);
 
     /**
-     * Method to do page reuse. When pages in the middle of the linear space, deallocating these
-     * pages is no effect for the final length of the linear space. So, if a deallocating page is in
-     * the middle of the linear space, it will not release immediately, on the contrary, it will be
-     * put into the freed page list. The page reuse operation is based on the freed pages and
-     * reuse pages ordered from beginning to end.
-     * @param size, the size to require.
-     * @param real, the real size be allocated.
-     * @return page index of this allocation.
+     * 进行页面重用。当线性空间中间的页面被释放时，
+     * 释放这些页面对线性空间的最终长度没有影响。
+     * 因此，如果释放的页面在线性空间的中间，它不会立即释放，
+     * 相反，它将被放入释放的页面列表中。
+     * 页面重用操作基于释放的页面，并按从头到尾的顺序重用页面。
+     * @param size, 所需的大小。
+     * @param real, 实际分配的大小。
+     * @return 此分配的页面索引。
      */
     int ReusePages(int size, int *real);
 
     /**
-     * Apply some pages. If there are freed pages, it will do pages reuse firstly. Otherwise it will
-     * allocate new pages.
-     * @param size, size of the required length.
-     * @param real, real length to allocated.
-     * @return, page index of this allocation.
+     * 申请一些页面。如果有释放的页面，它将首先进行页面重用。
+     * 否则，它将分配新页面。
+     * @param size, 所需长度的大小。
+     * @param real, 实际分配的长度。
+     * @return, 此分配的页面索引。
      */
     int AllocPages(int size, int *real);
 
     /**
-     * Get the allocated size associated with this page.
-     * @param page, page to find.
-     * @return allocated size associated with this page.
+     * 获取与此页面关联的已分配大小。
+     * @param page, 要查找的页面。
+     * @return 与此页面关联的已分配大小。
      */
     int GetAllocPageSize(int page);
 
     /**
-     * Deallocate pages specified by page.
-     * @param page, page to deallocate.
+     * 释放指定页面的页面。
+     * @param page, 要释放的页面。
      */
     void DeallocPages(int page);
 
     /**
-     * Create a section space with a specified name.
-     * @param name, a pointer to the name.
-     * @return a pointer to the created section space.
+     * 创建指定名称的部分空间。
+     * @param name, 名称的指针。
+     * @return 创建的部分空间的指针。
      */
     virtual ISectionSpace *CreateLinearSpace(const char *name);
 
     /**
-     * Drop a linear space with specified name.
-     * @param name, a pointer to the name.
+     * 删除指定名称的线性空间。
+     * @param name, 名称的指针。
      */
     virtual void DropLinearSpace(const char *name);
 
     /**
-     * Find a section with a name.
-     * @param name, a pointer to the name.
-     * @return a pointer to the section space.
+     * 查找指定名称的部分。
+     * @param name, 名称的指针。
+     * @return 部分空间的指针。
      */
     virtual ISectionSpace *FindLinearSpace(const char *name);
 
     /**
-     * Erase a linear space and clear its section space.
-     * @param name, a pointer to its name.
+     * 擦除线性空间并清除其部分空间。
+     ** @param name, 其名称的指针。
      */
     virtual void EraseLinearSpace(const char *name);
 
     /**
-     * Copy data to the end of the destination section space from the source section space.
-     * @param dst, the destination section name.
-     * @param src, the source section name.
-     * @return, bool, a boolean value indicate whether it is success or not.
+     * 将源部分空间的数据复制到目标部分空间的末尾。
+     * @param dst, 目标部分名称。
+     * @param src, 源部分名称。
+     * @return, bool, 表示成功与否的布尔值。
      */
     virtual bool AppendLinearSpace(const char *dst, const char *src);
 };

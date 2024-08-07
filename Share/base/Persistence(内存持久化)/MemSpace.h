@@ -1,79 +1,69 @@
-//
-//  MemSpace.h
-//  MemSpace
-//
-//  Created by  on 2022/5/28.
-//  Copyright (c)  Tencent. All rights reserved.
-//
 
 #ifndef MEMSPACE_H
 #define MEMSPACE_H
 
 #include "PageSpace.h"
 
-/// Const definitions
-// Define the max page count the MemSpace can apply.
+/// 常量定义
+// 定义 MemSpace 可以申请的最多页面数。
 #define MEMORY_PAGE_COUNT 1280
 
 /**
- * Implement IPageSpace with memory storage. Before using this implementation, you should note that
- * the data in memory storage will be lost on shutting down or device power off. So upon the
- * persistence implementation, MemSpace can only use to store data temporarily when there are no any
- * disk(file) space.
+ * 使用内存存储实现 IPageSpace。在使用此实现之前，请注意，在关闭或设备断电时，内存存储中的数据将丢失。
+ * 因此，在进行持久化实现时，MemSpace 只能在没有磁盘（文件）空间的情况下临时存储数据。
  */
 class MemSpace : public IPageSpace {
 private:
-    // Active page count in memory.
+    // 内存中的活动页面数。
     int count;
-    // Pages that are allocated.
+    // 分配的页面。
     char *pages[MEMORY_PAGE_COUNT];
-    // Page count of every page recorded in pages.
+    // 记录 pages 中每个页面的页面数。
     int pageLens[MEMORY_PAGE_COUNT];
 public:
     /**
-     * Default constructor.
+     * 默认构造函数。
      */
     MemSpace();
 
     /**
-     * Default destructor.
+     * 默认析构函数。
      */
     ~MemSpace();
 
     /**
-     * Override method for allocating pages.
-     * @param start, page index required.
-     * @param len, count of pages.
-     * @return, the real page index allocated.
+     * 重写分配页面的方法。
+     * @param start, 所需的页面索引。
+     * @param len, 页面数。
+     * @return, 分配的实际页面索引。
      */
     virtual int Allocate(int start, int len);
 
     /**
-     * Deallocate pages.
-     * @param page, page to deallocate
+     * 释放页面。
+     * @param page, 要释放的页面
      */
     virtual void Deallocate(int page);
 
     /*
-     * Read data from memory space.
+     * 从内存空间读取数据。
      */
     virtual int Read(int page, int offset, void *buf, int len);
 
     /*
-     * Write data to memory space.
+     * 将数据写入内存空间。
      */
     virtual int Write(int page, int offset, void *buf, int len);
 
     /*
-     * Copy data in memory space.
+     * 在内存空间中复制数据。
      */
     virtual bool Copy(int dp, int df, int sp, int sf, int len);
 
     /*
-     * Initialize memory space with zero.
+     * 用零初始化内存空间。
      */
     virtual void Zero(int page, int offset, int len);
 };
-
 
 #endif //MEMSPACE_H

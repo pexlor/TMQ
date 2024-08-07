@@ -1,11 +1,3 @@
-//
-//  SectionSpace.h
-//  SectionSpace
-//
-//  Created by  on 2022/5/28.
-//  Copyright (c)  Tencent. All rights reserved.
-//
-
 #ifndef SECTION_SPACE_H
 #define SECTION_SPACE_H
 
@@ -16,165 +8,159 @@
 #include "Ordered.h"
 #include "SectionAllocator.h"
 
-/// Const definitions
-// Inner section name for allocated pages.
-#define SECTION_ALLOC                           "__ALLOC__"
-// Max allocated id for int.
-#define ALLOC_ID_MAX                            0xffffffff
-#define SPACE_RESET_THRESHOLD                   0.3
-// Element reserved count for lazy linear list.
-#define LAZY_RESERVE_READ                       0
-#define LAZY_RESERVE_WRITE                      1
+/// 常量定义
+// 内部部分名称用于分配的页面。
+#define SECTION_ALLOC "__ALLOC__"
+// int 的最大分配 id。
+#define ALLOC_ID_MAX 0xffffffff
+#define SPACE_RESET_THRESHOLD 0.3
+// 延迟线性列表的元素预留计数。
+#define LAZY_RESERVE_READ 0
+#define LAZY_RESERVE_WRITE 1
 
 /**
- * SectionSpace is inherited from SectionAllocator. With this class, we implement all of the
- * APIs defined in ISectionSpace, such as Read, Write, Copy, Zero and other virtual function
- * inherited from iis parent. Besides, SectionSpace holds the name, and all of the SecAlloc. we use
- * a LazyLinearList to manage all of the SecAlloc, that we must be careful with the space expand and
- * shrink. In order to ensure the section space allocation efficiency, it is not timely for cleaning
- * the section space. The const value SPACE_RESET_THRESHOLD is used to toggle the ResetSpace task.
+ * SectionSpace 从 SectionAllocator 继承。使用此类，我们实现了 ISectionSpace 中定义的所有 API，
+ * 如 Read、Write、Copy、Zero 和从其父级继承的其他虚拟函数。此外，SectionSpace 保存名称和所有 SecAlloc。
+ * 我们使用 LazyLinearList 管理所有 SecAlloc，因此我们必须小心处理空间扩展和收缩。
+ * 为了确保部分空间分配效率，不立即清理部分空间。常量 SPACE_RESET_THRESHOLD 用于切换 ResetSpace 任务。
  */
 class SectionSpace : public SectionAllocator {
 private:
-    // Array for saving the section name.
+    // 保存部分名称的数组。
     char name[SECTION_NAME_LEN];
-    // A pointer to the persistence
+    // 指向持久性的指针
     Persistence *persist;
-    // Alloc id for section allocation.
+    // 部分分配的 alloc id。
     unsigned int allocId = 0;
-    // The count of release.
+    // 释放的计数。
     unsigned int releaseCount;
-    // Meta section describes the position of the section space.
+    // 描述部分空间位置的元部分。
     MetaSection metaSection;
-    // Section allocation list info.
+    // 部分分配列表信息。
     LazyLinearList<SecAlloc> lazyAllocList;
 
 public:
     /**
-     * Construct a Section Space with persistence and a pointer to the name.
-     * @param persist, a pointer to the persistence.
-     * @param sec, a pointer the the section name.
+     * 使用持久性和指向名称的指针构造 Section Space。
+     * @param persist, 指向持久性的指针。
+     * @param sec, 指向部分名称的指针。
      */
     SectionSpace(Persistence *persist, const char *sec);
 
     /**
-     * Default destruct.
+     * 默认析构。
      */
     virtual ~SectionSpace();
 
     /**
-     * Reset and clean the section space. When this task occurs, the lazy linear list will shrink.
-     * the SecAlloc with release state will be removed.
-     * @return the size of the SecAlloc list.
+     * 重置并清理部分空间。当此任务发生时，延迟线性列表将缩小。
+     * 具有释放状态的 SecAlloc 将被移除。
+     * @return SecAlloc 列表的大小。
      */
     unsigned int ResetSpace();
 
     /**
-     * Get method for the section name.
-     * @return a const pointer the the section name.
+     * 获取部分名称的方法。
+     * @return 部分名称的常量指针。
      */
     const char *GetName();
 
     /**
-     * Get method to collect the MetaAlloc list from section space.
-     * @param allocList, a reference to MetaAlloc list to save results
-     * @return, a boolean value whether it is success or not.
+     * 从部分空间收集 MetaAlloc 列表的方法。
+     * @param allocList, 用于保存结果的 MetaAlloc 列表引用
+     * @return, 是否成功的布尔值。
      */
     virtual bool GetAllocList(List<MetaAlloc> &allocList);
 
     /**
-     * Get the pointer to the lazy linear list with the required reserve count. For example, if you
-     * only want to do read on this list, reserve count can be zero. Or if you want to add one or
-     * more element into the list, the reserve count must be the count you want to add. When the
-     * reserved count can not be fulfilled, the section space will enlarge itself.
-     * @param reserve, reserve count of the LazyLinearList to ensure
-     * @return, a pointer to LazyLinearList.
+     * 获取具有所需预留计数的延迟线性列表的指针。例如，如果您只想在此列表上进行读取操作，预留计数可以为零。
+     * 或者，如果您想向列表中添加一个或多个元素，预留计数必须是您要添加的计数。
+     * 当预留计数无法满足时，部分空间将自行扩大。
+     * @param reserve, LazyLinearList 的预留计数以确保
+     * @return, LazyLinearList 的指针。
      */
     virtual LazyLinearList<SecAlloc> *GetLazyAllocList(TMQSize reserve);
 
     /**
-     * Release a SecAlloc, This will only change the state of the SecAlloc associated with this tmq
-     * section address, and then toggle a ResetSpace task.
-     * @param secAddress, a tmq address to a SecAlloc.
-     * @return, bool, a boolean value indicate whether the release is success or not.
+     * 释放 SecAlloc，这只会更改与此 tmq 部分地址关联的 SecAlloc 的状态，然后切换 ResetSpace 任务。
+     * @param secAddress, 到 SecAlloc 的 tmq 地址。
+     * @return, 表示释放是否成功的布尔值。
      */
     virtual bool ReleaseAlloc(TMQAddress secAddress);
 
     /**
-     * Append a SecAlloc and return section address.
-     * @param tmqAddress, a tmq address to MetaAlloc.
-     * @param size, the size with this address.
-     * @param state, the state of this SectionAlloc, ADDRESS_ALLOC, ADDRESS_FREE.
-     * @return, a tmq address in section address.
+     * 追加 SecAlloc 并返回部分地址。
+     * @param tmqAddress, 到 MetaAlloc 的 tmq 地址。
+     * @param size, 此地址的大小。
+     * @param state, 此 SectionAlloc 的状态，ADDRESS_ALLOC, ADDRESS_FREE。
+     * @return, 部分地址中的 tmq 地址。
      */
     virtual TMQAddress AppendAlloc(TMQAddress tmqAddress, TMQSize size, TMQLState state);
 
     /**
-     * Allocate pages for required size. If success, the page index will be return and the real size
-     * will be assigned into *allocSize.
-     * @param size, the required size, page of count.
-     * @param allocSize, the real size allocated.
-     * @return, page index for this allocation.
+     * 为所需大小分配页面。如果成功，将返回页面索引并将实际大小分配给 *allocSize。
+     * @param size, 所需大小，页面计数。
+     * @param allocSize, 实际分配的大小。
+     * @return, 此分配的页面索引。
      */
     virtual int AllocPages(int size, int *allocSize);
 
     /**
-     * Get the allocated size for this page.
-     * @param page, page to find.
-     * @return, the size to be allocated with this page.
+     * 获取为此页面分配的大小。
+     * @param page, 要查找的页面。
+     * @return, 为此页面分配的大小。
      */
     virtual int GetAllocPageSize(int page);
 
     /**
-     * Deallocate pages.
-     * @param page, start page to deallocate.
+     * 释放页面。
+     * @param page, 要释放的起始页面。
      */
     virtual void DeallocPages(int page);
 
     /**
-     * Allocate a linear storage space with specified length.
-     * @param length, the length required to allocate.
-     * @return a tmq address describe the allocated linear space.
+     * 为指定长度分配线性存储空间。
+     * @param length, 所需分配的长度。
+     * @return 描述分配的线性空间的 tmq 地址。
      */
     virtual TMQAddress Allocate(TMQLSize length);
 
     /**
-     * Deallocate a tmq address that is allocated by Allocate().
-     * @param address, a tmq address to deallocate.
+     * 释放由 Allocate() 分配的 tmq 地址。
+     * @param address, 要释放的 tmq 地址。
      */
     virtual void Deallocate(TMQAddress address);
 
     /**
-     * Read data from address and save the data to the result buffer. If success, the read length
-     * will be return, otherwise, -1 will be return.
-     * @param address, address to read.
-     * @param buf, a pointer to the buffer to save the results.
-     * @param length, length to read.
-     * @return TMQLSize, a TMQLSize value that has read.
+     * 从地址读取数据并将数据保存到结果缓冲区。如果成功，将返回读取长度，否则返回 -1。
+     * @param address, 读取的地址。
+     * @param buf, 保存结果的缓冲区指针。
+     * @param length, 读取的长度。
+     * @return TMQLSize, 已读取的 TMQLSize 值。
      */
     virtual TMQLSize Read(TMQAddress address, void *buf, TMQLSize length);
 
     /**
-     * Write data into a tmq address.
-     * @param address, the address to write to.
-     * @param data, a pointer to the data.
-     * @param length, the length of the data.
-     * @return, TMQLSize, the written length.
+     * 将数据写入 tmq 地址。
+     * @param address, 要写入的地址。
+     * @param data, 数据的指针。
+     * @param length, 数据的长度。
+     * @return, TMQLSize, 写入的长度。
      */
     virtual TMQLSize Write(TMQAddress address, void *data, TMQLSize length);
 
     /**
-     * Copy data for source address to the destination address in the linear space.
-     * @param dst, destination address to copy to.
-     * @param src, source address to copy from.
-     * @param length, the length to copy.
+     * 将源地址的数据复制到线性空间中的目标地址。
+     * @param dst, 复制到的目标地址。
+     * @param src, 从中复制的源地址。
+     * @param length, 要复制的长度。
      */
     virtual void Copy(TMQAddress dst, TMQAddress src, TMQLSize length);
 
     /**
-     * Zero a tmq address with specified length.
-     * @param address, a tmq address
-     * @param length, the length to set zero.
+     * 用指定长度将 tmq 地址归零。
+     * @param address, tmq 地址
+     * @param length, 设置为零的长度。
      */
     virtual void Zero(TMQAddress address, TMQLSize length);
 };

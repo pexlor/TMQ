@@ -1,11 +1,3 @@
-//
-//  Persistence.cpp
-//  Persistence
-//
-//  Created by  on 2022/5/28.
-//  Copyright (c)  Tencent. All rights reserved.
-//
-
 #include "string.h"
 #include "Defines.h"
 #include "Persistence.h"
@@ -28,6 +20,12 @@
  * 2. Check whether there are data in the page space. if no any data, require the first page to
  *  save the meta sections and add the SECTION_ALLOC MetaSection to the lazySectionList.
  */
+/*
+
+/*构造一个持久性对象。两个重要步骤：
+    在页面空间上创建一个lazySectionList。
+    检查页面空间中是否有数据。如果没有任何数据，请求第一页来保存元段并将SECTION_ALLOC MetaSection添加到lazySectionList中。 
+*/ 
 Persistence::Persistence(IPageSpace *pageSpace) : pageSpace(pageSpace), sectionSpaces{} {
     lazySectionList = new LazyLinearList<MetaSection>(pageSpace,
                                                       SECTIONS_ADDRESS, TMQ_PAGE_SIZE);
@@ -40,6 +38,8 @@ Persistence::Persistence(IPageSpace *pageSpace) : pageSpace(pageSpace), sectionS
 /*
  * Destructor, delete lazySectionList.
  */
+/*
+析构函数，删除lazySectionList。 */
 Persistence::~Persistence() {
     delete lazySectionList;
 }
@@ -47,6 +47,7 @@ Persistence::~Persistence() {
 /*
  * Compare function for the MetaPage.
  */
+/*对MetaPage的比较函数。*/
 int PageCompare(void *p1, void *p2) {
     auto *alloc = (MetaPage *) p1;
     auto *another = (MetaPage *) p2;
@@ -60,6 +61,8 @@ int PageCompare(void *p1, void *p2) {
 /*
  * Create a linear space with the specified name.
  */
+/*
+创建一个指定名称的线性空间。 */
 ISectionSpace *Persistence::CreateLinearSpace(const char *name) {
     // Check whether it is exist or not.
     auto *sectionSpace = FindLinearSpace(name);
@@ -77,6 +80,7 @@ ISectionSpace *Persistence::CreateLinearSpace(const char *name) {
 /*
  * Drop a linear space, this will erase the linear space, be careful with this call.
  */
+/*删除一个线性空间，这将删除线性空间，调用此函数时要小心。 */ 
 void Persistence::DropLinearSpace(const char *name) {
     // Erase the section space.
     EraseLinearSpace(name);
@@ -95,6 +99,8 @@ void Persistence::DropLinearSpace(const char *name) {
 /*
  * Erase a linear space, erase the meta section too.
  */
+
+/*删除一个线性空间，也删除元区段。 */ 
 void Persistence::EraseLinearSpace(const char *name) {
     // Check parameters.
     if (!name || strcmp(SECTION_ALLOC, name) == 0) {
@@ -107,6 +113,7 @@ void Persistence::EraseLinearSpace(const char *name) {
 /*
  * Find a linear space with the specified section name.
  */
+/*使用指定的区段名称查找线性空间。 */ 
 ISectionSpace *Persistence::FindLinearSpace(const char *name) {
     SectionSpace *sectionLinearSpace = nullptr;
     // Loop to find the section space.
@@ -123,6 +130,7 @@ ISectionSpace *Persistence::FindLinearSpace(const char *name) {
 /*
  * Return the page space.
  */
+/*返回页面空间。 */
 IPageSpace *Persistence::GetPageSpace() {
     return pageSpace;
 }
@@ -135,6 +143,13 @@ IPageSpace *Persistence::GetPageSpace() {
  * Before add new allocated pages to the section SECTION_ALLOC, it must ensure that the
  * SECTION_ALLOC section is not overflow. If it is overflow, move the section to new pages.
  */
+/*
+页面分配的实现。关键步骤：
+首先进行页面重用，如果成功，返回分配的页面。
+从页面空间分配新页面。
+将分配的页面保存到SECTION_ALLOC区段中。
+在将新分配的页面添加到SECTION_ALLOC区段之前，必须确保
+SECTION_ALLOC区段没有溢出。如果溢出，将该区段移动到新页面。 */
 int Persistence::AllocPages(int size, int *real) {
     if (size <= 0) {
         return PAGE_NULL;
@@ -200,6 +215,10 @@ int Persistence::AllocPages(int size, int *real) {
  * size, so it is success. Another is that there are freed pages but all of them are continuous, we
  * combine the them into new page as return.
  */
+/*
+重用页面。这个函数会从头到尾搜索已释放的页面。有两种情况可以重用页面。一种是有一个已释放的页面，其大小满足所需的
+大小，所以它是成功的。另一种是有已释放的页面，但它们都是连续的，我们将它们合并为新页面返回。 */
+
 int Persistence::ReusePages(int size, int *real) {
     // Find the SECTION_ALLOC meta section.
     int sectionIndex = -1;
@@ -265,6 +284,9 @@ int Persistence::ReusePages(int size, int *real) {
  * Deallocate a page. Every deallocating, we will check the page is at the end of the PageSpace, if
  * the page is at the end, we can deallocate that page from PageSpace.
  */
+/*
+释放一个页面。每次释放时，我们将检查页面是否位于PageSpace的末尾，如果
+页面在末尾，我们可以从PageSpace中释放该页面。 */
 void Persistence::DeallocPages(int page) {
     if (page <= 0) {
         return;
@@ -303,6 +325,9 @@ void Persistence::DeallocPages(int page) {
 /*
  * Find a section with its name. If it is not exist, it will be created when the create is true.
  */
+/*
+
+根据名称查找一个区段。如果不存在，当create为true时将创建它。 */
 MetaSection Persistence::FindSection(const char *sec, bool create) {
     MetaSection section(sec);
     if (!sec) {
@@ -337,6 +362,9 @@ MetaSection Persistence::FindSection(const char *sec, bool create) {
 /*
  * Resize the section for reserve count.
  */
+/*
+
+为预留计数调整区段的大小。 */
 bool Persistence::ResizeSection(MetaSection &section, TMQSize reserve) {
     // If it is not overflow for the reserve count, return true.
     if (!Overflow(section, reserve)) {
@@ -371,6 +399,11 @@ bool Persistence::ResizeSection(MetaSection &section, TMQSize reserve) {
  * 1. Find the section. Add it to the lazySectionList if it is not exist.
  * 2. Release old pages and update the meta section in lazySectionList
  */
+/*
+
+使用参数区段更新区段。两个关键步骤：
+查找区段。如果不存在，则将其添加到lazySectionList中。
+释放旧页面并在lazySectionList中更新元区段 */
 bool Persistence::UpdateSection(MetaSection &section) {
     // Find the meta section.
     int secIndex = -1;
@@ -399,6 +432,12 @@ bool Persistence::UpdateSection(MetaSection &section) {
  * 2. Release all pages that owned by all SecAlloc(lazySectionList)
  * 3. Clear all of the elements in the lazySectionList
  */
+/*
+
+擦除区段，步骤如下：
+查找名为sec的元区段。
+释放所有由所有SecAlloc（lazySectionList）拥有的页面
+清除lazySectionList中的所有元素 */
 void Persistence::EraseSection(const char *sec) {
     // Find the meta section named sec.
     int secIndex = -1;
@@ -435,6 +474,9 @@ void Persistence::EraseSection(const char *sec) {
 /*
  * Move section to new page specified by parameter pages.
  */
+/*
+
+将区段移动到由参数pages指定的新页面。 */
 bool Persistence::MoveSection(MetaSection &section, int page, TMQSize size) {
     // Check parameters
     if (page < 0 || size == 0 || size == -1) {
@@ -464,6 +506,9 @@ bool Persistence::MoveSection(MetaSection &section, int page, TMQSize size) {
 /*
  * Check whether the section is overflow with the expand count reserved.
  */
+/*
+
+检查在预留扩展计数的情况下，区段是否溢出。 */
 bool Persistence::Overflow(const MetaSection &section, TMQSize expand) {
     // Check parameters.
     if (section.start < 0 || section.count <= 0 || expand == 0) {
@@ -485,6 +530,9 @@ bool Persistence::Overflow(const MetaSection &section, TMQSize expand) {
 /*
  * Get the allocated page size associated with specified page.
  */
+/*
+获取与指定页面关联的分配页面大小。
+*/
 int Persistence::GetAllocPageSize(int page) {
     // Find the meta section first.
     MetaSection pageSection;
@@ -519,6 +567,12 @@ int Persistence::GetAllocPageSize(int page) {
  * 2. Resize the destination section space for adding new elements.
  * 3. Copy element from the source section space to destination section space one by one.
  */
+/*
+将数据从源节空间复制到目标节空间的末尾。主要步骤：
+查找源和目标线性空间的元节。
+调整目标节空间的大小以添加新元素。
+逐一将元素从源节空间复制到目标节空间。
+*/
 bool Persistence::AppendLinearSpace(const char *dst, const char *src) {
     // Find source meta section.
     MetaSection srcSection = FindSection(src, false);
