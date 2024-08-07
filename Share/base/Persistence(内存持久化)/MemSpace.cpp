@@ -1,9 +1,9 @@
 //
-//  MemSpace.cpp
-//  MemSpace
+// MemSpace.cpp
+// MemSpace
 //
-//  Created by  on 2022/5/28.
-//  Copyright (c)  Tencent. All rights reserved.
+// 创建于 2022/5/28.
+// 版权所有 (c) 腾讯。保留所有权利。
 //
 
 #include "MemSpace.h"
@@ -13,23 +13,22 @@
 #include <cstring>
 #include <cstdlib>
 
-
 /*
- * Construct a memory space, Initialize members.
+ * 构造一个内存空间，初始化成员。
  */
 MemSpace::MemSpace() : pages{nullptr}, count(0), pageLens{0} {
 
 }
 
 /*
- * Allocate pages. If start is invalid ( < 0), it will find a free page index for this allocation.
+ * 分配页面。如果 start 无效（< 0），它将为此分配找到一个空闲页面索引。
  */
 int MemSpace::Allocate(int start, int len) {
-    // Allocation reaches to the MEMORY_PAGE_COUNT, failed.
+    // 分配达到 MEMORY_PAGE_COUNT，失败。
     if (count >= MEMORY_PAGE_COUNT) {
         return -1;
     }
-    // If the start is invalid or not specified, find a free page index for it.
+    // 如果 start 无效或未指定，为它找到一个空闲页面索引。
     int index = start;
     if (index < 0) {
         for (int i = 0; i < MEMORY_PAGE_COUNT; ++i) {
@@ -39,14 +38,13 @@ int MemSpace::Allocate(int start, int len) {
             }
         }
     }
-    // Check whether the page at index has allocated, if it has allocated, Deallocate it firstly.
+    // 检查位于索引处的页面是否已分配，如果是，则首先释放它。
     if (pages[index]) {
         Deallocate(index);
     }
-    // Apply memory with calloc directly.
+    // 直接使用 calloc 申请内存。
     pages[index] = static_cast<char *>(calloc(len * TMQ_PAGE_SIZE, sizeof(char)));
-    // Check whether the calloc is success or not. If success return valid page index, otherwise
-    // return invalid page index.
+    // 检查 calloc 是否成功。如果成功返回有效页面索引，否则返回无效页面索引。
     if (pages[index]) {
         pageLens[index] = len;
         count++;
@@ -57,10 +55,10 @@ int MemSpace::Allocate(int start, int len) {
 }
 
 /*
- * Deallocate pages at page index.
+ * 在页面索引处释放页面。
  */
 void MemSpace::Deallocate(int page) {
-    // Check whether the page at index is valid.
+    // 检查位于索引处的页面是否有效。
     if (page >= 0 && pages[page]) {
         free(pages[page]);
         pages[page] = nullptr;
@@ -69,38 +67,38 @@ void MemSpace::Deallocate(int page) {
 }
 
 /*
- * Read data from page + offset to the buf.
+ * 从 page + offset 读取数据到 buf。
  */
 int MemSpace::Read(int page, int offset, void *buf, int len) {
-    // Check parameters.
+    // 检查参数。
     if (page < 0 || page >= count || offset < 0 || !buf || len < 0) {
         return -1;
     }
     if (offset + len > pageLens[page] * TMQ_PAGE_SIZE) {
         abort();
     }
-    // Copy data with memcpy.
+    // 使用 memcpy 复制数据。
     memcpy(buf, pages[page] + offset, len);
     return len;
 }
 
 /*
- * Write data to page + offset.
+ * 将数据写入 page + offset。
  */
 int MemSpace::Write(int page, int offset, void *buf, int len) {
-    // Check parameters.
+    // 检查参数。
     if (page >= 0 && offset >= 0 && buf && len > 0) {
         if (offset + len > pageLens[page] * TMQ_PAGE_SIZE) {
             abort();
         }
-        // Copy data with memcpy.
+        // 使用 memcpy 复制数据。
         memcpy(pages[page] + offset, buf, len);
     }
     return len;
 }
 
 /*
- * Copy data from source page + offset ot destination page + offset.
+ * 从源页面 + 偏移复制数据到目标页面 + 偏移。
  */
 bool MemSpace::Copy(int dp, int df, int sp, int sf, int len) {
     bool success = false;
@@ -110,7 +108,7 @@ bool MemSpace::Copy(int dp, int df, int sp, int sf, int len) {
     if (sf + len > pageLens[sp] * TMQ_PAGE_SIZE) {
         abort();
     }
-    // check parameters and copy.
+    // 检查参数并复制。
     if (dp >= 0 && df >= 0 && sp >= 0 && sf >= 0 && len >= 0) {
         memcpy(pages[dp] + df, pages[sp] + sf, len);
         success = true;
@@ -119,17 +117,17 @@ bool MemSpace::Copy(int dp, int df, int sp, int sf, int len) {
 }
 
 /*
- * Initialize the storage at page + offset
+ * 初始化位于 page + offset 的存储。
  */
 void MemSpace::Zero(int page, int offset, int len) {
-    // Check parameters.
+    // 检查参数。
     if (page >= 0 && offset >= 0 && len > 0) {
         memset(pages[page] + offset, 0, len);
     }
 }
 
 /*
- * Destruct the memory space. Release all memory in this function.
+ * 析构内存空间。在此函数中释放所有内存。
  */
 MemSpace::~MemSpace() {
     for (int i = 0; i < MEMORY_PAGE_COUNT; ++i) {
@@ -140,6 +138,3 @@ MemSpace::~MemSpace() {
     }
     count = 0;
 }
-
-
-

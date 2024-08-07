@@ -1,9 +1,9 @@
 //
-//  LazyLinkList.h
-//  LazyLinkList
+// LazyLinkList.h
+// LazyLinkList
 //
-//  Created by  on 2022/5/28.
-//  Copyright (c)  Tencent. All rights reserved.
+// 创建于 2022/5/28.
+// 版权 (c) 腾讯。保留所有权利。
 //
 
 #ifndef LAZY_LINK_LIST_H
@@ -15,27 +15,26 @@
 #include "Persistence.h"
 
 /**
- * This is lazy link list, which can record the order of the elements to be added. It holds a lazy
- * linear list to save the list, and expand the LazyNode to record the prev and next element index.
- * Since the insert is so complex and the efficiency is relatively low, so we do not use it any more.
+ * 这是一个懒惰链表，可以记录要添加元素的顺序。它持有一个懒惰线性列表来保存列表，并扩展 LazyNode 以记录前一个和下一个元素的索引。
+ * 由于插入操作非常复杂且效率相对较低，因此我们不再使用它。
  */
 template<typename T>
 class LazyNode {
 public:
-    // value for the node.
+    // 节点的值。
     T value;
-    // previous index of a node
+    // 节点的前一个索引
     int prev;
-    // next index of a node
+    // 节点的下一个索引
     int next;
 
     /**
-     * Default constructor.
+     * 默认构造函数。
      */
     LazyNode() : next(-1), prev(-1) {}
 
     /*
-     * Constructor with a value.
+     * 带值的构造函数。
      */
     LazyNode(const T &t) : value(t), next(-1), prev(-1) {}
 };
@@ -43,123 +42,123 @@ public:
 template<typename T>
 class LazyLinkList : public Iterator<T> {
 private:
-    // header index of the link list.
+    // 链表的头索引。
     int header;
-    // tail index of the link list.
+    // 链表的尾索引。
     int tail;
-    // a pointer the the PageSpace
+    // 指向 PageSpace 的指针
     IPageSpace *linearSpace;
-    // a pointer to the lazy linear list.
+    // 指向懒惰线性列表的指针。
     LazyLinearList<LazyNode<T>> *lazyLinearList;
-    // a iterator value.
+    // 迭代器值。
     int iterator;
-    // tmq address of the lazy link list.
+    // 懒惰链表的 tmq 地址。
     TMQAddress address;
 
 public:
     /*
-     * Default constructor.
+     * 默认构造函数。
      */
     LazyLinkList() : header(-1), tail(-1), linearSpace(nullptr), lazyLinearList(nullptr) {}
 
     /**
-     * Construct with linear space and tmq address and pages capacity.
-     * @param linearSpace, a pointer the page space.
-     * @param address , the start address.
-     * @param capacity , the capacity of the pages.
+     * 使用线性空间、tmq 地址和页面容量构造。
+     * @param linearSpace, 指向页面空间的指针。
+     * @param address , 起始地址。
+     * @param capacity , 页面的容量。
      */
     LazyLinkList(IPageSpace *linearSpace, TMQAddress address, TMQSize capacity);
 
     /**
-     * Desctrutor.
+     * 析构函数。
      */
     ~LazyLinkList();
 
     /**
-     * Set method for header.
-     * @param nh, the new header.
+     * 设置头的方法。
+     * @param nh, 新的头。
      */
     void SetHeader(int nh);
 
     /**
-     * Set method for the tail.
-     * @param nt, the new tail.
+     * 设置尾的方法。
+     * @param nt, 新的尾。
      */
     void SetTail(int nt);
 
     /**
-     * Remove a element at index.
-     * @param index, index to remove at.
-     * @return, success or not.
+     * 在索引处移除元素。
+     * @param index, 要移除的索引。
+     * @return, 成功与否。
      */
     bool Remove(long index);
 
     /**
-     * Add an element with compare.
-     * @param t, the value
-     * @param compare, a pointer to the compare.
-     * @return, the position of this element.
+     * 使用比较添加元素。
+     * @param t, 值
+     * @param compare, 指向比较的指针。
+     * @return, 该元素的索引位置。
      */
     int Add(T &t, Compare compare = nullptr);
 
     /**
-     * Insert an element to the index.
-     * @param index, the index to insert to.
-     * @param t, the value.
-     * @return success or not
+     * 将值插入到索引处。
+     * @param index, 要插入的索引。
+     * @param t, 值。
+     * @return 成功与否
      */
     bool Insert(long index, const T &t);
 
     /**
-     * Get method for the element at index.
-     * @param index, the index
-     * @return the value.
+     * 获取索引处的元素。
+     * @param index, 索引
+     * @return 值。
      */
     T Get(long index);
 
     /**
-     * The size of this elements.
-     * @return size.
+     * 此元素的大小。
+     * @return 大小。
      */
     TMQSize GetSize();
 
     /**
-     * The capacity of this list.
+     * 该列表的容量。
      * @return
      */
     TMQSize GetCapacity();
 
     /**
-     * Modify the element at index.
-     * @param index, the index to set.
-     * @param alloc, the new value.
+     * 修改索引处的元素。
+     * @param index, 要设置的索引。
+     * @param alloc, 新值。
      */
     void Set(int index, T alloc);
 
     /**
-     * Remove all elements.
+     * 移除所有元素。
      */
     void Clear();
 
 public:
-    // Return a boolean value indicate whether there are elements or not.
+    // 返回一个布尔值表示是否有元素。
     virtual bool HasNext();
 
-    // Get a element and move iterator to next.
+    // 获取一个元素并将迭代器移动到下一个。
     virtual T Next();
 
-    // Remove the current element.
+    // 移除当前元素。
     virtual bool Remove();
 };
 
 template<typename T>
 LazyLinkList<T>::LazyLinkList(IPageSpace *linearSpace, TMQAddress address, TMQSize capacity)
-        :linearSpace(linearSpace), address(address), header(-1), tail(-1), lazyLinearList(nullptr) {
+    :linearSpace(linearSpace), address(address), header(-1), tail(-1), lazyLinearList(nullptr) {
     linearSpace->Read(PAGE(address), OFFSET(address), &header, sizeof(int));
     linearSpace->Read(PAGE(address), OFFSET(address) + sizeof(int), &tail, sizeof(int));
     this->lazyLinearList = new LazyLinearList<LazyNode<T>>(linearSpace, address + sizeof(int) * 2,
-                                                           capacity - sizeof(int) * 2);
-    // Initialize the header and tail.
+                                                      capacity - sizeof(int) * 2);
+    // 初始化头和尾。
     if (this->lazyLinearList->GetSize() == 0) {
         header = -1;
         tail = -1;
@@ -168,7 +167,7 @@ LazyLinkList<T>::LazyLinkList(IPageSpace *linearSpace, TMQAddress address, TMQSi
 }
 
 /*
- * Remove element at index.
+ * 移除索引处的元素。
  */
 template<typename T>
 bool LazyLinkList<T>::Remove(long index) {
@@ -193,7 +192,7 @@ bool LazyLinkList<T>::Remove(long index) {
 }
 
 /*
- * Add an element with compare.
+ * 使用比较添加元素。
  */
 template<typename T>
 int LazyLinkList<T>::Add(T &t, Compare compare) {
@@ -210,7 +209,7 @@ int LazyLinkList<T>::Add(T &t, Compare compare) {
 }
 
 /*
- * Insert a new value to position index. This will cause the link adjusting.
+ * 将新值插入到索引位置。这将导致链接调整。
  */
 template<typename T>
 bool LazyLinkList<T>::Insert(long index, const T &t) {
@@ -263,7 +262,7 @@ bool LazyLinkList<T>::Insert(long index, const T &t) {
 }
 
 /*
- * Set the header.
+ * 设置头。
  */
 template<typename T>
 void LazyLinkList<T>::SetHeader(int nh) {
@@ -275,7 +274,7 @@ void LazyLinkList<T>::SetHeader(int nh) {
 }
 
 /*
- * Set the tail
+ * 设置尾
  */
 template<typename T>
 void LazyLinkList<T>::SetTail(int nt) {
@@ -284,7 +283,7 @@ void LazyLinkList<T>::SetTail(int nt) {
 }
 
 /*
- * Get value at index.
+ * 获取索引处的值。
  */
 template<typename T>
 T LazyLinkList<T>::Get(long index) {
@@ -293,7 +292,7 @@ T LazyLinkList<T>::Get(long index) {
 }
 
 /*
- * Destruct the list, release the lazyLinearList.
+ * 析构列表，释放 lazyLinearList。
  */
 template<typename T>
 LazyLinkList<T>::~LazyLinkList() {
@@ -301,7 +300,7 @@ LazyLinkList<T>::~LazyLinkList() {
 }
 
 /*
- * Get the size.
+ * 获取大小。
  */
 template<typename T>
 TMQSize LazyLinkList<T>::GetSize() {
@@ -309,7 +308,7 @@ TMQSize LazyLinkList<T>::GetSize() {
 }
 
 /*
- * Set the element at index.
+ * 设置索引处的元素。
  */
 template<typename T>
 void LazyLinkList<T>::Set(int index, T alloc) {
@@ -318,7 +317,7 @@ void LazyLinkList<T>::Set(int index, T alloc) {
     lazyLinearList->Set(index, indexNode);
 }
 
-// Return a boolean value indicate whether there are elements or not.
+// 返回一个布尔值表示是否有元素。
 template<typename T>
 bool LazyLinkList<T>::HasNext() {
     return tail >= 0 && iterator != -1;
@@ -343,7 +342,7 @@ bool LazyLinkList<T>::Remove() {
 }
 
 /*
- * Clear all.
+ * 清除所有。
  */
 template<typename T>
 void LazyLinkList<T>::Clear() {
@@ -353,12 +352,11 @@ void LazyLinkList<T>::Clear() {
 }
 
 /*
- * Get capacity of this list.
+ * 获取此列表的容量。
  */
 template<typename T>
 TMQSize LazyLinkList<T>::GetCapacity() {
     return lazyLinearList->GetCapacity();
 }
-
 
 #endif //LAZY_LINK_LIST_H

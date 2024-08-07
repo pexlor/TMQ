@@ -1,10 +1,9 @@
-
 //
-//  IDGenerator.h
-//  IDGenerator
+// IDGenerator.h
+// IDGenerator
 //
-//  Created by  on 2022/3/28.
-//  Copyright (c)  Tencent. All rights reserved.
+// 创建于 2022/3/28.
+// 版权所有 (c) 腾讯. 保留所有权利。
 //
 
 #ifndef ID_GENERATOR_H
@@ -12,53 +11,53 @@
 
 #include "Defines.h"
 
-/// Const value definitions
-// Id increase one by one
-#define ID_INC          1
-// Max value of the int id.
-#define ID_INT_MAX      0xFFFFFFFF
-// Min value of the int id, start from 1.
-#define ID_INT_MIN      0x00000001
+/// 常量值定义
+// ID逐个递增
+#define ID_INC 1
+// int类型ID的最大值
+#define ID_INT_MAX 0xFFFFFFFF
+// int类型ID的最小值，从1开始
+#define ID_INT_MIN 0x00000001
 
 /**
- * Id generator, this class provides common ids using atomic operation.
+ * ID生成器，该类提供使用原子操作的通用ID。
  */
 class IDGenerator {
 private:
-    // Increased id for topic
-    TMQId tid;
-    // Increased id for tmq message
-    TMQMsgId mid;
+ // 主题递增的ID
+ TMQId tid;
+ // tmq消息递增的ID
+ TMQMsgId mid;
 public:
-    /**
-     * Get an id for topic, this will increase tid by one.
-     * @return an unsigned int value indicate the topic id.
-     */
-    TMQId GetTopicId();
+ /**
+ * 获取一个主题ID，这将使tid增加1。
+ * @return 一个无符号整数值表示主题ID。
+ */
+ TMQId GetTopicId();
 
-    /**
-     * Set the topic id
-     * @param id, id to be set.
-     */
-    void SetTopicId(TMQId id);
+ /**
+ * 设置主题ID
+ * @param id，要设置的ID。
+ */
+ void SetTopicId(TMQId id);
 
-    /**
-     * Get an id for tmq message, this will increase mid by one.
-     * @return an unsigned id for tmq message.
-     */
-    TMQMsgId GetMsgId();
+ /**
+ * 获取一个tmq消息的ID，这将使mid增加1。
+ * @return 一个无符号的tmq消息ID。
+ */
+ TMQMsgId GetMsgId();
 
-    /**
-     * Set the message id.
-     * @param id, id to be set.
-     */
-    void SetMsgId(TMQMsgId id);
+ /**
+ * 设置消息ID。
+ * @param id，要设置的ID。
+ */
+ void SetMsgId(TMQMsgId id);
 
-    /**
-     * Static singleton method for IDGenerator instance.
-     * @return a pointer to the IDGenerator instance.
-     */
-    static IDGenerator *GetInstance();
+ /**
+ * IDGenerator实例的静态单例方法。
+ * @return 一个指向IDGenerator实例的指针。
+ */
+ static IDGenerator *GetInstance();
 };
 
 

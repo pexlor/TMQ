@@ -1,11 +1,3 @@
-//
-//  FileSpace.cpp
-//  FileSpace
-//
-//  Created by  on 2022/3/28.
-//  Copyright (c)  Tencent. All rights reserved.
-//
-
 #include "Defines.h"
 #include "FileSpace.h"
 #include "cstring"
@@ -15,39 +7,38 @@
 #include <cstdio>
 
 /*
- * Apply new file space. If the require space exceeds the length of the fill, the file will be
- * expanded to fulfill the request. The expanded content will be fill with zero. If the expansion is
- * fail, the length of the file will be recovered.
+ * 应用新的文件空间。如果所需空间超过文件的当前长度，文件将被扩展以满足请求。
+ * 扩展的内容将用零填充。如果扩展失败，文件长度将恢复。
  */
 int FileSpace::Allocate(int start, int count) {
-    // Check parameter
+    // 检查参数
     if (count <= 0) {
         return PAGE_NULL;
     }
-    // Calculate the start page index for the allocation.
+    // 计算分配的起始页面索引。
     int realStart = (int)((start < 0) ? (length / TMQ_PAGE_SIZE) : start);
-    // Calculate the final length of the file.
+    // 计算文件的最终长度。
     TMQLSize require = (realStart + count) * TMQ_PAGE_SIZE;
-    // Expand the file and fill the new content.
+    // 扩展文件并填充新内容。
     if (require > length && truncate(file, (long)require) == 0) {
-        // If the Fill action is not success, recover it.
+        // 如果填充操作不成功，恢复它。
         if (!Fill((long)length, (long)(require - length))) {
             truncate(file, (long)length);
             return PAGE_NULL;
         }
-        // Expand success.
+        // 扩展成功。
         length = require;
     }
     return realStart;
 }
 
 /*
- * Deallocate page content, truncate file for shrinking.
+ * 释放页面内容，截断文件以缩小。
  */
 void FileSpace::Deallocate(int page) {
     if (page >= 0) {
         long newLen = page * TMQ_PAGE_SIZE;
-        // Set the new file length.
+        // 设置新的文件长度。
         if (truncate(file, newLen) == 0) {
             length = newLen;
         }
@@ -55,15 +46,14 @@ void FileSpace::Deallocate(int page) {
 }
 
 /*
- *  Use Load method to achieve the memory address for the access content firstly, and then copy data
- *  using memcpy.
+ * 首先使用Load方法获取访问内容的内存地址，然后使用memcpy复制数据。
  */
 int FileSpace::Read(int page, int offset, void *buf, int len) {
-    // Check parameters.
+    // 检查参数。
     if (page < 0 || offset < 0 || !buf || len <= 0) {
         return -1;
     }
-    // Read has reached or exceeded the end of the file, fail.
+    // 读取已到达或超过文件末尾，失败。
     if (page * TMQ_PAGE_SIZE + offset + len > length) {
         return -1;
     }
@@ -71,14 +61,14 @@ int FileSpace::Read(int page, int offset, void *buf, int len) {
     int ro = offset % TMQ_PAGE_SIZE;
     int size = len;
     char *ptr = (char *) buf;
-    // Read data from pages, until read count reaches required size.
+    // 从页面读取数据，直到读取计数达到所需大小。
     while (size > 0) {
         int count = TMQ_PAGE_SIZE - ro;
         if (count > size) {
             count = size;
         }
         char *data = (char *) Load(rp++);
-        // copy data to result.
+        // 将数据复制到结果中。
         memcpy(ptr, data + ro, count);
         size = size - count;
         ro = 0;
@@ -88,11 +78,10 @@ int FileSpace::Read(int page, int offset, void *buf, int len) {
 }
 
 /*
- *  Use Load method to achieve the memory address for the access content firstly, and then copy data
- *  using memcpy.
+ * 首先使用Load方法获取访问内容的内存地址，然后使用memcpy复制数据。
  */
 int FileSpace::Write(int page, int offset, void *buf, int len) {
-    // Check parameters.
+    // 检查参数。
     if (page < 0 || offset < 0 || !buf || len < 0) {
         return -1;
     }
@@ -100,7 +89,7 @@ int FileSpace::Write(int page, int offset, void *buf, int len) {
     int ro = offset % TMQ_PAGE_SIZE;
     int size = len;
     char *ptr = (char *) buf;
-    // Write data to pages, until written count reaches the required size.
+    // 将数据写入页面，直到写入计数达到所需大小。
     while (size > 0) {
         int count = TMQ_PAGE_SIZE - ro;
         if (count > size) {
@@ -116,7 +105,7 @@ int FileSpace::Write(int page, int offset, void *buf, int len) {
 }
 
 /*
- * Copy data from source to destination. This function will use mmap directly, and no cache reserved.
+ * 将数据从源复制到目标。此函数将直接使用mmap，不保留缓存。
  */
 bool FileSpace::Copy(int dp, int df, int sp, int sf, int len) {
     int fd = open(file, O_RDWR);
@@ -128,18 +117,18 @@ bool FileSpace::Copy(int dp, int df, int sp, int sf, int len) {
     int rdf = df % TMQ_PAGE_SIZE;
     int rsp = sp + sf / TMQ_PAGE_SIZE;
     int rsf = sf % TMQ_PAGE_SIZE;
-    // map the destination content.
+    // 映射目标内容。
     void *dst = mmap(nullptr, len, PROT_WRITE | PROT_READ, MAP_SHARED, fd, rdp * TMQ_PAGE_SIZE);
-    // map the source content.
+    // 映射源内容。
     void *src = mmap(nullptr, len, PROT_WRITE | PROT_READ, MAP_SHARED, fd, rsp * TMQ_PAGE_SIZE);
-    // mmap finish, colse the file descriptor.
+    // mmap完成，关闭文件描述符。
     close(fd);
-    // Check and copy content when mmap is success on both source and destination content.
+    // 当源和目标内容的mmap都成功时，检查和复制内容。
     if (dst != MAP_FAILED && src != MAP_FAILED) {
         memcpy((char *) dst + rdf, (char *) src + rsf, len);
         success = true;
     }
-    // Concel mmap.
+    // 取消mmap。
     if (dst != MAP_FAILED) {
         munmap(dst, len);
     }
@@ -150,8 +139,7 @@ bool FileSpace::Copy(int dp, int df, int sp, int sf, int len) {
 }
 
 /*
- * Set the content to zero. Use Load method to achieve the memory address for the access content
- * firstly, and then set zero with memset.
+ * 将内容设置为零。首先使用Load方法获取访问内容的内存地址，然后使用memset设置为零。
  */
 void FileSpace::Zero(int page, int offset, int len) {
     if (page < 0 || offset < 0 || len < 0) {
@@ -160,14 +148,14 @@ void FileSpace::Zero(int page, int offset, int len) {
     int rp = page + offset / TMQ_PAGE_SIZE;
     int ro = offset % TMQ_PAGE_SIZE;
     int size = len;
-    // Set values to pages, until the count reaches the required size.
+    // 设置页面的值，直到计数达到所需大小。
     while (size > 0) {
         int count = TMQ_PAGE_SIZE - ro;
         if (count > size) {
             count = size;
         }
         char *data = (char *) Load(rp++);
-        // Set to zero.
+        // 设置为零。
         memset(data + ro, 0, count);
         size = size - count;
         ro = 0;
@@ -175,26 +163,26 @@ void FileSpace::Zero(int page, int offset, int len) {
 }
 
 /*
- * Construct a file space. It will try to access the file, if it is not exist, it will be created.
+ * 构造一个文件空间。它将尝试访问文件，如果不存在，将创建它。
  */
 FileSpace::FileSpace(const char *path) :
-        file{0}, pages{0}, maps{nullptr}, length(0) {
-    // path is valid.
+    file{0}, pages{0}, maps{nullptr}, length(0) {
+    // 路径有效。
     if (path) {
         strncpy(file, path, sizeof(file));
-        // Access the file, and use correct mode to open it.
+        // 访问文件，并以正确的模式打开它。
         int fd = -1;
         mode_t mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;
         if (access(file, F_OK) != 0) {
-            // Open with create mode.
+            // 以创建模式打开。
             fd = open(file, O_RDWR | O_CREAT, mode);
         }
         if (fd <= 0) {
-            // Open with read only mode.
+            // 以只读模式打开。
             fd = open(file, O_RDONLY, mode);
         }
         if (fd > 0) {
-            // Get the file length.
+            // 获取文件长度。
             length = lseek(fd, 0, SEEK_END);
             close(fd);
         }
@@ -202,33 +190,31 @@ FileSpace::FileSpace(const char *path) :
 }
 
 /*
- * Load data at page. If it is already loaded, use the address directly, otherwise, map the content
- * to memory with mmap.
+ * 加载页面上的数据。如果已经加载，直接使用地址，否则，使用mmap将内容映射到内存。
  */
 void *FileSpace::Load(int page) {
     if ((page + 1) * TMQ_PAGE_SIZE > length) {
         return nullptr;
     }
-    // Calculate the position in pages with % operation.
+    // 使用%操作计算页面中的位置。
     int pos = page % RESERVE_COUNT;
-    // Check whether the pages[pos] is equal to the page required, If it is not equal, drop this
-    // page.
+    // 检查pages[pos]是否等于所需的页面，如果不等于，丢弃这个页面。
     if (pages[pos] != page) {
         if (maps[pos]) {
             munmap(maps[pos], TMQ_PAGE_SIZE);
             maps[pos] = nullptr;
         }
     }
-    // The page required is not loaded yet, open file and load it with mmap.
+    // 所需的页面尚未加载，打开文件并用mmap加载它。
     if (!maps[pos]) {
         int fd = open(file, O_RDWR);
-        // Open file with O_RDWR success.
+        // 成功以O_RDWR打开文件。
         if (fd > 0) {
             maps[pos] = mmap(nullptr, TMQ_PAGE_SIZE, PROT_WRITE | PROT_READ, MAP_SHARED, fd,
-                             page * TMQ_PAGE_SIZE);
+                            page * TMQ_PAGE_SIZE);
             close(fd);
         }
-        // Open file fail, means the load is fail.
+        // 打开文件失败，意味着加载失败。
         if (maps[pos] == MAP_FAILED) {
             maps[pos] = nullptr;
         }
@@ -238,18 +224,18 @@ void *FileSpace::Load(int page) {
 }
 
 /*
- * Fill content with zero. This will use the safe IO operation to fill data to the content.
+ * 用零填充内容。这将使用安全的IO操作将数据填充到内容中。
  */
 bool FileSpace::Fill(long pos, long len) {
-    // Check valid parameters.
+    // 检查有效参数。
     if (pos < 0 || len < 0) {
         return false;
     }
     bool suc = false;
-    // Open file with read/write permissions.
+    // 以读/写权限打开文件。
     FILE *f = fopen(file, PAGE_FILE_MODE);
     if (f) {
-        // Open success, use fwrite to write zeros to the required content.
+        // 打开成功，使用fwrite将零写入所需内容。
         size_t size = len;
         fpos_t offset = pos;
         char zero[TMQ_PAGE_SIZE] = {0};
@@ -257,15 +243,15 @@ bool FileSpace::Fill(long pos, long len) {
         while (size > 0) {
             size_t ws = size > sizeof(zero) ? sizeof(zero) : size;
             ws = fwrite(zero, 1, ws, f);
-            // Write reaches to the required length.
+            // 写入达到所需长度。
             if (ws < 0) {
                 break;
             }
             size -= ws;
         }
-        // Close the file.
+        // 关闭文件。
         fclose(f);
-        // Write reaches to the required length, the result is success.
+        // 写入达到所需长度，结果是成功的。
         suc = (size == 0);
     }
     return suc;
